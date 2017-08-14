@@ -15,39 +15,50 @@ import (
 	"github.com/mjibson/go-dsp/fft"
 
 	"math"
-	"reflect"
+//	"reflect"
 )
 
 func main() {
-	fmt.Println(math.MaxInt32)
+//		wavFileName := "data/trumpet/c5(16).wav"
+	wavFileName := "data/sin432(16bit).wav"
 	
-	wavFileName := "data/trumpet/c5(16).wav"
 	wavFile, err := os.Open(wavFileName);
 	checkErr(err)
 	wavReader, err := wav.New(wavFile)
 	checkErr(err)
 
-	fmt.Println(wavReader)
 	sampleRate := wavReader.Header.SampleRate
-	sampleCount := wavReader.Samples
+	channelCount := wavReader.NumChannels
+	sampleCount := wavReader.Samples // number of data samples
+	sampleLength := sampleCount / int(channelCount) // # of data samples normalized by channel count
 
-	wavMagnitudes, err := wavReader.ReadSamples(sampleCount)
-	wavMagnitudesInt16 := wavMagnitudes.([]int16)
-	wavMagnitudesFloat64 := make([]float64, len(wavMagnitudesInt16))
-	for i := range wavMagnitudesInt16 {
-		wavMagnitudesFloat64[i] = float64(wavMagnitudesInt16[i])
-	}
+	fmt.Println("channel count:", channelCount)
+	fmt.Println("sample count:", sampleCount)
+	fmt.Println("sample length:", sampleLength)
+
+	wavSamples, err := wavReader.ReadFloats(sampleCount)
 	
-	fmt.Println(reflect.TypeOf(wavMagnitudesInt16))
-	checkErr(err)
-
-	// complex values of form (time, magnitude) for use in FFT
-	wavComplex := make([]complex128, sampleCount, sampleCount)
-	for i := 0; i < sampleCount; i++ {
-		wavComplex[i] = complex(float64(i) / float64(sampleRate), wavMagnitudesFloat64[i])
+	wavMagnitudes := make([]float32, sampleLength)
+	if channelCount == 1 {
+		for i := range wavSamples {
+			wavMagnitudes[i] = wavSamples[i]
+		}
+	} else if channelCount == 2 {
+		for i := 0; i < sampleCount; i += 2 {
+			// Mono-to-stereo conversion using (L+R)/2
+			wavMagnitudes[i/2] = 0.5 * (wavSamples[i] + wavSamples[i+1])
+		}
 	}
 
-	wavFFT := fft.FFT(wavComplex)
+	wavTimeMagnitudeTable := make([]complex128, sampleLength, sampleLength)
+	for i := 0; i < sampleLength; i++ {
+		wavTimeMagnitudeTable[i] = complex(float64(i) / float64(sampleRate), float64(wavMagnitudes[i]))
+	}
+
+	wavFFT := fft.FFT(wavTimeMagnitudeTable)
+	for ind, val := range wavFFT {
+		wavFFT[ind] = val / complex(float64(sampleLength), 0.0)
+	}
 	
 	plt, err := plot.New()
 	checkErr(err)
@@ -56,26 +67,41 @@ func main() {
 		gran := 1
 		pts := make(plotter.XYs, len(wavData) / gran)
 		for i := 0; i < len(wavData) / gran; i += 1 {
-			val := wavData[i * gran]
+			val := wavData[i]
 			pts[i].X = real(val)
 			pts[i].Y = imag(val)
-			if imag(val) > 1e8 {
-				fmt.Println(real(val), imag(val))
-			}
 		}
 
 		return pts
 	}
 
-	wavXYs := wavToXYs(wavFFT)
 	
+	wavFreqAmpTable := make([]complex128, sampleLength, sampleLength)
+	for i, val := range wavFFT {
+		x := real(val)
+		y := imag(val)
+		frequency := float64(i) * (float64(sampleRate) / float64(sampleLength))
+		amplitude := math.Sqrt(math.Pow(x, 2.0) + math.Pow(y, 2.0))
+		wavFreqAmpTable[i] = complex(frequency, amplitude)
+		if amplitude > 200 {
+			fmt.Println(frequency, amplitude)
+		}
+	}
+
+	wavXYs := wavToXYs(wavFreqAmpTable[0 : len(wavFreqAmpTable) / 2])
+//	wavXYs := wavToXYs(wavTimeMagnitudeTable)
+	
+/*	err = plotutil.AddLinePoints(plt,
+		"", wavXYs)
+	checkErr(err)*/
+
 	err = plotutil.AddScatters(plt,
 		"", wavXYs)
 	checkErr(err)
 
 	fmt.Println("generating plot")
 	outputFileName := "WaveForm.png"
-	err = plt.Save(50*vg.Inch, 4*vg.Inch, outputFileName)
+	err = plt.Save(100*vg.Inch, 10*vg.Inch, outputFileName)
 	checkErr(err)	
 }
 

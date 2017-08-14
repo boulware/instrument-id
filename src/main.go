@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	//	wavFileName := "data/trumpet/c5(16).wav"
+//		wavFileName := "data/trumpet/c5(16).wav"
 	wavFileName := "data/sin432(16bit).wav"
 	
 	wavFile, err := os.Open(wavFileName);
@@ -32,26 +32,27 @@ func main() {
 	sampleCount := wavReader.Samples // number of data samples
 	sampleLength := sampleCount / int(channelCount) // # of data samples normalized by channel count
 
+	fmt.Println("channel count:", channelCount)
 	fmt.Println("sample count:", sampleCount)
 	fmt.Println("sample length:", sampleLength)
 
-	wavMagnitudes, err := wavReader.ReadSamples(sampleCount)
-	wavMagnitudesInt16 := wavMagnitudes.([]int16)
-	wavMagnitudesFloat64 := make([]float64, sampleLength)
+	wavSamples, err := wavReader.ReadFloats(sampleCount)
+	
+	wavMagnitudes := make([]float32, sampleLength)
 	if channelCount == 1 {
-		for i := range wavMagnitudesInt16 {
-			wavMagnitudesFloat64[i] = float64(wavMagnitudesInt16[i])
+		for i := range wavSamples {
+			wavMagnitudes[i] = wavSamples[i]
 		}
 	} else if channelCount == 2 {
 		for i := 0; i < sampleCount; i += 2 {
-			wavMagnitudesFloat64[i/2] = 0.5 * (float64(wavMagnitudesInt16[i]) + float64(wavMagnitudesInt16[i+1]))
+			// Mono-to-stereo conversion using (L+R)/2
+			wavMagnitudes[i/2] = 0.5 * (wavSamples[i] + wavSamples[i+1])
 		}
 	}
 
-	
 	wavTimeMagnitudeTable := make([]complex128, sampleLength, sampleLength)
 	for i := 0; i < sampleLength; i++ {
-		wavTimeMagnitudeTable[i] = complex(float64(i) / float64(sampleRate), wavMagnitudesFloat64[i])
+		wavTimeMagnitudeTable[i] = complex(float64(i) / float64(sampleRate), float64(wavMagnitudes[i]))
 	}
 
 	wavFFT := fft.FFT(wavTimeMagnitudeTable)
@@ -87,8 +88,8 @@ func main() {
 		}
 	}
 
-//	wavXYs := wavToXYs(wavFreqAmpTable[0 : len(wavFreqAmpTable) / 2])
-	wavXYs := wavToXYs(wavTimeMagnitudeTable)
+	wavXYs := wavToXYs(wavFreqAmpTable[0 : len(wavFreqAmpTable) / 2])
+//	wavXYs := wavToXYs(wavTimeMagnitudeTable)
 	
 /*	err = plotutil.AddLinePoints(plt,
 		"", wavXYs)

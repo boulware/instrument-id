@@ -21,31 +21,42 @@ import (
 func main() {
 	//	wavFileName := "data/trumpet/c5(16).wav"
 	wavFileName := "data/sin432(16bit).wav"
+	
 	wavFile, err := os.Open(wavFileName);
 	checkErr(err)
 	wavReader, err := wav.New(wavFile)
 	checkErr(err)
 
 	sampleRate := wavReader.Header.SampleRate
-	sampleCount := wavReader.Samples
+	channelCount := wavReader.NumChannels
+	sampleCount := wavReader.Samples // number of data samples
+	sampleLength := sampleCount / int(channelCount) // # of data samples normalized by channel count
 
 	fmt.Println("sample count:", sampleCount)
+	fmt.Println("sample length:", sampleLength)
 
 	wavMagnitudes, err := wavReader.ReadSamples(sampleCount)
 	wavMagnitudesInt16 := wavMagnitudes.([]int16)
-	wavMagnitudesFloat64 := make([]float64, len(wavMagnitudesInt16))
-	for i := range wavMagnitudesInt16 {
-		wavMagnitudesFloat64[i] = float64(wavMagnitudesInt16[i])
+	wavMagnitudesFloat64 := make([]float64, sampleLength)
+	if channelCount == 1 {
+		for i := range wavMagnitudesInt16 {
+			wavMagnitudesFloat64[i] = float64(wavMagnitudesInt16[i])
+		}
+	} else if channelCount == 2 {
+		for i := 0; i < sampleCount; i += 2 {
+			wavMagnitudesFloat64[i/2] = 0.5 * (float64(wavMagnitudesInt16[i]) + float64(wavMagnitudesInt16[i+1]))
+		}
 	}
+
 	
-	wavTimeMagnitudeTable := make([]complex128, sampleCount, sampleCount)
-	for i := 0; i < sampleCount; i++ {
+	wavTimeMagnitudeTable := make([]complex128, sampleLength, sampleLength)
+	for i := 0; i < sampleLength; i++ {
 		wavTimeMagnitudeTable[i] = complex(float64(i) / float64(sampleRate), wavMagnitudesFloat64[i])
 	}
 
 	wavFFT := fft.FFT(wavTimeMagnitudeTable)
 	for ind, val := range wavFFT {
-		wavFFT[ind] = val / complex(float64(sampleCount), 0.0)
+		wavFFT[ind] = val / complex(float64(sampleLength), 0.0)
 	}
 	
 	plt, err := plot.New()
@@ -64,28 +75,32 @@ func main() {
 	}
 
 	
-	wavFreqAmpTable := make([]complex128, sampleCount, sampleCount)
+	wavFreqAmpTable := make([]complex128, sampleLength, sampleLength)
 	for i, val := range wavFFT {
 		x := real(val)
 		y := imag(val)
-		frequency := float64(i) * (float64(sampleRate) / float64(sampleCount))
+		frequency := float64(i) * (float64(sampleRate) / float64(sampleLength))
 		amplitude := math.Sqrt(math.Pow(x, 2.0) + math.Pow(y, 2.0))
 		wavFreqAmpTable[i] = complex(frequency, amplitude)
-		//		if amplitude > 10 { fmt.Println(frequency, amplitude) }
-		if amplitude > 200{
+		if amplitude > 200 {
 			fmt.Println(frequency, amplitude)
 		}
 	}
 
-	wavXYs := wavToXYs(wavFreqAmpTable[0 : len(wavFreqAmpTable) / 2])
+//	wavXYs := wavToXYs(wavFreqAmpTable[0 : len(wavFreqAmpTable) / 2])
+	wavXYs := wavToXYs(wavTimeMagnitudeTable)
 	
-	err = plotutil.AddLinePoints(plt,
+/*	err = plotutil.AddLinePoints(plt,
+		"", wavXYs)
+	checkErr(err)*/
+
+	err = plotutil.AddScatters(plt,
 		"", wavXYs)
 	checkErr(err)
 
 	fmt.Println("generating plot")
 	outputFileName := "WaveForm.png"
-	err = plt.Save(10*vg.Inch, 10*vg.Inch, outputFileName)
+	err = plt.Save(100*vg.Inch, 10*vg.Inch, outputFileName)
 	checkErr(err)	
 }
 

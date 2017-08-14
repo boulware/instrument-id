@@ -48,3 +48,6 @@ Temporary Items
 *.zip
 bld/data/sin432(32bit).wav
 *.wav
+*.exe
+bld/WaveForm.png
+*.png

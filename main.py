@@ -45,16 +45,6 @@ def FindPeak(array):
 
 np.set_printoptions(threshold=np.inf)
 
-# Creates an immutable tuple to store WAV file data
-#WAVData = namedtuple(	'WAVData',
-#						['raw_bytes',
-#						'sample_width_data',
-#						'channel_count',
-#						'sample_width',
-#						'sampling_frequency',
-#						'frame_count',
-#						'compression_type'])
-
 root = tk.Tk()
 file = {}
 fft_raw_data = []
@@ -129,69 +119,58 @@ def RecordMic():
 	toolbar.update()
 	canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-# Convert a list of bytes to a corresponding list of samples of appropriate width
+# Convert a list of bytes to a corresponding list of samples (as signed ints) of appropriate byte width.
 def SampleWidthDataFromBytes(byte_list, sample_width):
 	sample_width_lists = byte_list.reshape(-1, sample_width)
-
-	# 24-bit is the special case here (8 * 3 bits)
-	#if(sample_width == 3):
-	#	zeroes = [[0] for n in range(len(sample_width_lists))]
-	#	sample_width_lists = np.hstack((sample_width_lists, zeroes))
 
 	sample_width_bytes = [bytes(e) for e in sample_width_lists]
 	sample_width_ints = [int.from_bytes(e, byteorder='little', signed=True) for e in sample_width_bytes]
 
-	print("sample_width_lists:\n{}".format(sample_width_lists[1000:1010]))
-	print("sample_width_bytes:\n{}".format(sample_width_bytes[1000:1010]))
-	print("sample_width_ints:\n{}".format(sample_width_ints[1000:1050]))
-
 	return sample_width_ints
 	
-	#print(sample_width_data[1000:1100])
+
+class Waveform:
+	def LoadFromFile(self, file_name):
+		WAV = wave.open(file_name, 'rb')
+
+		raw_bytes = np.fromstring(WAV.readframes(-1), 'Int8') # encode raw byte data as an array of signed 8-bit integers
+
+		self.channel_count 		= WAV.getnchannels()
+		self.sample_width 		= WAV.getsampwidth()
+		self.sampling_frequency	= WAV.getframerate()
+		self.frame_count		= WAV.getnframes()
+		self.compression_type	= WAV.getcomptype()
+
+		WAV.close()
+
+		# Only support 8- through 32-bit WAV files.
+		if(self.sample_width < 1 or self.sample_width > 4):
+			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV files are currently supported.")
+
+		self.time_domain_samples = SampleWidthDataFromBytes(raw_bytes, self.sample_width)
+
+	def CalculateFrequencyRepresentation(self):
+		self.k = np.arange(self.frame_count)
+		self.t = self.k / self.sampling_frequency # Creates discrete array of time values for our sampling frequency
+		self.T = self.frame_count / self.sampling_frequency # Sample length in seconds
+		self.frq = self.k / self.T
+
+		self.freq_domain_samples = scipy.fftpack.fft(self.time_domain_samples)
 
 
 def OpenWAVFile():
+	sound = Waveform()
+
 	file_name = filedialog.askopenfilename()
-	WAV = wave.open(file_name, 'rb')
-
-	# TODO: This only works with 16-bit WAVs. I need to expand to 24-bit WAVs as well for sure since they are very common.
-	file['raw_bytes']	 		= np.fromstring(WAV.readframes(-1), 'Int8') # encode raw byte data as an array of signed 8-bit integers
-	file['channel_count'] 		= WAV.getnchannels()
-	file['sample_width'] 		= WAV.getsampwidth()
-	file['sampling_frequency']	= WAV.getframerate()
-	file['frame_count']			= WAV.getnframes()
-	file['compression_type']	= WAV.getcomptype()
-
-	WAV.close()
-
-	# Only support 8- through 32-bit WAV files.
-	if(file['sample_width'] < 1 or file['sample_width'] > 4):
-		print("Audio file sample width is not supported. Only 8- through 32-bit WAV files are supported.")
-
-	file['sample_width_data'] = SampleWidthDataFromBytes(file['raw_bytes'], file['sample_width'])
+	sound.LoadFromFile(file_name)
+	sound.CalculateFrequencyRepresentation()
 
 	fig = Figure(figsize=(5,5), dpi=100)
 	waveform_plot = fig.add_subplot(2, 1, 1)
 	fft_plot = fig.add_subplot(2, 1, 2)
 
-	print("frame count: {}".format(file['frame_count']))
-	k = np.arange(file['frame_count'])
-	t = k / file['sampling_frequency'] # Creates discrete array of time values for our sampling frequency
-	T = file['frame_count'] / file['sampling_frequency'] # Sample length in seconds
-	frq = k / T
-
-	print("channel count={}".format(file['channel_count']))
-	print("sample width={}".format(file['sample_width']))
-	print("sample frequency={}".format(file['sampling_frequency']))
-	print("frame count={}".format(file['frame_count']))
-
-	#print(file['raw_data'])
-
-	global fft_raw_data
-	fft_raw_data = scipy.fftpack.fft(file['sample_width_data'])
-
-	waveform_plot.plot(t, file['sample_width_data'])
-	fft_plot.plot(frq, fft_raw_data)
+	waveform_plot.plot(sound.t, sound.time_domain_samples)
+	fft_plot.plot(sound.frq, sound.freq_domain_samples)
 
 	canvas = FigureCanvasTkAgg(fig, master=root)
 	canvas.show()

@@ -149,13 +149,39 @@ class Waveform:
 
 		self.time_domain_samples = SampleWidthDataFromBytes(raw_bytes, self.sample_width)
 
-	def CalculateFrequencyRepresentation(self):
-		self.k = np.arange(self.frame_count)
-		self.t = self.k / self.sampling_frequency # Creates discrete array of time values for our sampling frequency
-		self.T = self.frame_count / self.sampling_frequency # Sample length in seconds
-		self.frq = self.k / self.T
+	# Returns a slice of the waveform in time domain from start_time (in seconds) to end_time (in seconds)
+	def GetTimeSlice(self, start_time, end_time):
+		start_k = int(start_time * self.sampling_frequency)
+		end_k = int(end_time * self.sampling_frequency)
 
-		self.freq_domain_samples = scipy.fftpack.fft(self.time_domain_samples)
+		k_count = end_k - start_k
+
+		return [start_time + k / self.sampling_frequency for k in range(k_count)], self.time_domain_samples[start_k:end_k]
+
+	def GetFFT(self, start_time, end_time):
+		time_interval = end_time - start_time
+		sample_count = time_interval * self.sampling_frequency
+
+		k = np.arange(sample_count)
+		t = start_time + k / self.sampling_frequency
+		T = sample_count / self.sampling_frequency
+		frq = k / T
+
+		#self.t = self.k / self.sampling_frequency # Creates discrete array of time values for our sampling frequency		
+		#self.k = np.arange(self.frame_count)
+		#self.T = self.frame_count / self.sampling_frequency # Sample length in seconds
+		#self.frq = self.k / self.T
+
+		freq_domain_samples = scipy.fftpack.fft(self.GetTimeSlice(start_time, end_time))
+
+		#print(freq_domain_samples)
+
+		if len(frq) > len(freq_domain_samples):
+			frq = frq[:-1]
+		if len(frq) < len(freq_domain_samples):
+			freq_domain_samples[:-1]
+
+		return frq[:2000], freq_domain_samples[1][:2000]
 
 
 def OpenWAVFile():
@@ -163,14 +189,21 @@ def OpenWAVFile():
 
 	file_name = filedialog.askopenfilename()
 	sound.LoadFromFile(file_name)
-	sound.CalculateFrequencyRepresentation()
 
 	fig = Figure(figsize=(5,5), dpi=100)
-	waveform_plot = fig.add_subplot(2, 1, 1)
-	fft_plot = fig.add_subplot(2, 1, 2)
+	time_plot = fig.add_subplot(2, 1, 1)
+	freq_plot = fig.add_subplot(2, 1, 2)
 
-	waveform_plot.plot(sound.t, sound.time_domain_samples)
-	fft_plot.plot(sound.frq, sound.freq_domain_samples)
+	#sound.GetTimeSlice(1.1, 1.11)
+	#print(sound.GetTimeSlice(1.1, 1.11))
+
+	times, values = sound.GetTimeSlice(0.7, 1.0)
+	time_plot.plot(times, values)
+
+	freqs, values = sound.GetFFT(0.7, 1.0)
+	freq_plot.plot(freqs, values)
+	#waveform_plot.plot(sound.GetTimeSlice(1.1, 1.2))
+	#fft_plot.plot(sound.frq, sound.freq_domain_samples)
 
 	canvas = FigureCanvasTkAgg(fig, master=root)
 	canvas.show()

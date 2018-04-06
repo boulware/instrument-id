@@ -148,6 +148,9 @@ class Waveform:
 			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV files are currently supported.")
 
 		self.time_domain_samples = SampleWidthDataFromBytes(raw_bytes, self.sample_width)
+		self.trimmed_time_domain_samples = self.Trim()
+
+		#print(self.trimmed_time_domain_samples)
 
 	# Returns a slice of the waveform in time domain from start_time (in seconds) to end_time (in seconds)
 	def GetTimeSlice(self, start_time, end_time):
@@ -156,7 +159,7 @@ class Waveform:
 
 		k_count = end_k - start_k
 
-		return [start_time + k / self.sampling_frequency for k in range(k_count)], self.time_domain_samples[start_k:end_k]
+		return self.time_domain_samples[start_k:end_k], [start_time + k / self.sampling_frequency for k in range(k_count)]
 
 	def GetFFT(self, start_time, end_time):
 		time_interval = end_time - start_time
@@ -172,7 +175,7 @@ class Waveform:
 		#self.T = self.frame_count / self.sampling_frequency # Sample length in seconds
 		#self.frq = self.k / self.T
 
-		freq_domain_samples = scipy.fftpack.fft(self.GetTimeSlice(start_time, end_time))
+		freq_domain_samples = abs(scipy.fftpack.fft(self.GetTimeSlice(start_time, end_time)))
 
 		#print(freq_domain_samples)
 
@@ -181,7 +184,68 @@ class Waveform:
 		if len(frq) < len(freq_domain_samples):
 			freq_domain_samples[:-1]
 
-		return frq[:2000], freq_domain_samples[1][:2000]
+		return freq_domain_samples[0][:2000], frq[:2000]
+
+	def GetTrimmedFFT(self):
+		sample_count = len(self.trimmed_time_domain_samples)
+
+		k = np.arange(sample_count)
+		t = k / self.sampling_frequency
+		T = sample_count / self.sampling_frequency
+		frq = k / T
+
+		freq_domain_samples = abs(scipy.fftpack.fft(self.trimmed_time_domain_samples, sample_count))
+
+#		if len(frq) > len(freq_domain_samples):
+#			frq = frq[:-1]
+#		if len(frq) < len(freq_domain_samples):
+#			freq_domain_samples[:-1]
+
+
+		#return freq_domain_samples[:2000], frq[:2000]
+		return freq_domain_samples, frq
+
+	def GetTrimmedSlice(self):
+		return self.trimmed_time_domain_samples, range(len(self.trimmed_time_domain_samples))
+
+	# Trim portions of the time domain samples to remove beginning and ending silence as well as maybe some of the attack and release.
+	def Trim(self, amplitude_threshold = 0.01, anomaly_threshold = 1000):
+		wave_start_index, wave_end_index = None, None
+
+		#print("len(self.time_domain_samples)={}".format(len(self.time_domain_samples)))
+
+		# First, we find the max amplitude.
+		max_amplitude = max(self.time_domain_samples)
+		min_amplitude = min(self.time_domain_samples)
+
+		#print("max_amplitude={}".format(max_amplitude))
+
+		anomaly_count = 0
+
+		for index, sample in enumerate(self.time_domain_samples):
+			if wave_start_index == None:			
+				if (sample > amplitude_threshold * max_amplitude) or (sample < amplitude_threshold * min_amplitude):
+					anomaly_count += 1
+					#print("index={}; sample={}; anomalies={}".format(index, sample, anomaly_count))
+
+				if anomaly_count >= anomaly_threshold:
+					wave_start_index = index - anomaly_threshold
+					anomaly_count = 0
+			elif wave_end_index == None:
+				if (sample < amplitude_threshold * max_amplitude) and (sample > amplitude_threshold * min_amplitude):
+					anomaly_count += 1
+					#print("index={}; sample={}; anomalies={}".format(index, sample, anomaly_count))
+
+				if anomaly_count >= anomaly_threshold:
+					wave_end_index = index - anomaly_threshold
+					anomaly_count = 0
+					break
+
+		#print("wave_start_index={}\nwave_end_index={}".format(wave_start_index, wave_end_index))
+
+		return self.time_domain_samples[wave_start_index:wave_end_index]
+
+
 
 
 def OpenWAVFile():
@@ -197,10 +261,13 @@ def OpenWAVFile():
 	#sound.GetTimeSlice(1.1, 1.11)
 	#print(sound.GetTimeSlice(1.1, 1.11))
 
-	times, values = sound.GetTimeSlice(0.7, 1.0)
+	s_t = 0
+	e_t = 0.5
+
+	values, times = sound.GetTrimmedSlice()
 	time_plot.plot(times, values)
 
-	freqs, values = sound.GetFFT(0.7, 1.0)
+	values, freqs = sound.GetTrimmedFFT()
 	freq_plot.plot(freqs, values)
 	#waveform_plot.plot(sound.GetTimeSlice(1.1, 1.2))
 	#fft_plot.plot(sound.frq, sound.freq_domain_samples)

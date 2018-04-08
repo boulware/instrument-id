@@ -9,6 +9,10 @@ matplotlib.use('TkAgg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
 from matplotlib.figure import Figure
 
+from pydub import AudioSegment
+
+from scipy.signal import hilbert
+
 import math
 
 import pyaudio
@@ -37,7 +41,7 @@ def FreqToNoteName(freq):
 
 	return '{}{}'.format(note_name, note_octave)
 
-freq = 491
+freq = 531
 print(FreqToNoteName(freq))
 
 def FindPeak(array):
@@ -130,27 +134,91 @@ def SampleWidthDataFromBytes(byte_list, sample_width):
 	
 
 class Waveform:
-	def LoadFromFile(self, file_name):
-		WAV = wave.open(file_name, 'rb')
+	def LoadFromFile(self, file_path):
+		if file_path[-4:].lower() == '.wav':
+			print("Loading .wav file: {}".format(file_path))
 
-		raw_bytes = np.fromstring(WAV.readframes(-1), 'Int8') # encode raw byte data as an array of signed 8-bit integers
+			wav_file = wave.open(file_path, 'rb')
 
-		self.channel_count 		= WAV.getnchannels()
-		self.sample_width 		= WAV.getsampwidth()
-		self.sampling_frequency	= WAV.getframerate()
-		self.frame_count		= WAV.getnframes()
-		self.compression_type	= WAV.getcomptype()
+			self.channel_count 		= wav_file.getnchannels()
+			self.sample_width 		= wav_file.getsampwidth()
+			self.sampling_frequency	= wav_file.getframerate()
+			self.frame_count		= wav_file.getnframes()
 
-		WAV.close()
+			raw_bytes = np.fromstring(wav_file.readframes(-1), 'Int8') # encode raw byte data as an array of signed 8-bit integers
+			self.time_domain_samples = SampleWidthDataFromBytes(raw_bytes, self.sample_width)
 
-		# Only support 8- through 32-bit WAV files.
+			wav_file.close()
+		elif file_path[-4:].lower() == '.mp3':
+			print("Loading .mp3 file: {}".format(file_path))
+
+			mp3_file = AudioSegment.from_file(file_path, format='mp3')
+
+			self.channel_count = mp3_file.channels
+			self.sample_width = mp3_file.sample_width
+			self.sampling_frequency = mp3_file.frame_rate
+			self.frame_count = mp3_file.frame_count
+
+			self.time_domain_samples = mp3_file.get_array_of_samples()
+		else:
+			print("Only .wav and .mp3 files are currently supported.")
+
+		if(self.channel_count != 1):
+			print("Non-mono audio files not supported. Undefined behavior may follow.")
 		if(self.sample_width < 1 or self.sample_width > 4):
-			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV files are currently supported.")
+			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV files are currently supported. Undefined behavior may follow.")
 
-		self.time_domain_samples = SampleWidthDataFromBytes(raw_bytes, self.sample_width)
-		self.trimmed_time_domain_samples = self.Trim()
+		self.trimmed_time_domain_samples, self.trim_start, self.trim_end = self.Trim()
 
-		#print(self.trimmed_time_domain_samples)
+
+	def GetWaveform(self):
+		return self.time_domain_samples, [k / self.sampling_frequency for k in range(len(self.time_domain_samples))]
+
+	def GetFFT(self):
+		sample_count = len(self.time_domain_samples)
+
+		k = np.arange(sample_count)
+		t = k / self.sampling_frequency
+		T = sample_count / self.sampling_frequency
+		frq = k / T
+
+		#self.t = self.k / self.sampling_frequency # Creates discrete array of time values for our sampling frequency		
+		#self.k = np.arange(self.frame_count)
+		#self.T = self.frame_count / self.sampling_frequency # Sample length in seconds
+		#self.frq = self.k / self.T
+
+		freq_domain_samples = abs(scipy.fftpack.fft(self.time_domain_samples))
+
+		#print(freq_domain_samples)
+
+#		if len(frq) > len(freq_domain_samples):
+#			frq = frq[:-1]
+#		if len(frq) < len(freq_domain_samples):
+#			freq_domain_samples[:-1]
+
+		return freq_domain_samples, frq
+
+	def GetTrimmedWaveform(self):
+		return self.trimmed_time_domain_samples, [x / self.sampling_frequency for x in range(len(self.trimmed_time_domain_samples))]
+		
+	def GetTrimmedFFT(self):
+		sample_count = len(self.trimmed_time_domain_samples)
+
+		k = np.arange(sample_count)
+		t = k / self.sampling_frequency
+		T = sample_count / self.sampling_frequency
+		frq = k / T
+
+		freq_domain_samples = abs(scipy.fftpack.fft(self.trimmed_time_domain_samples, sample_count))
+
+#		if len(frq) > len(freq_domain_samples):
+#			frq = frq[:-1]
+#		if len(frq) < len(freq_domain_samples):
+#			freq_domain_samples[:-1]
+
+
+		#return freq_domain_samples[:2000], frq[:2000]
+		return freq_domain_samples, frq
 
 	# Returns a slice of the waveform in time domain from start_time (in seconds) to end_time (in seconds)
 	def GetTimeSlice(self, start_time, end_time):
@@ -161,7 +229,7 @@ class Waveform:
 
 		return self.time_domain_samples[start_k:end_k], [start_time + k / self.sampling_frequency for k in range(k_count)]
 
-	def GetFFT(self, start_time, end_time):
+	def GetSliceFFT(self, start_time, end_time):
 		time_interval = end_time - start_time
 		sample_count = time_interval * self.sampling_frequency
 
@@ -186,64 +254,121 @@ class Waveform:
 
 		return freq_domain_samples[0][:2000], frq[:2000]
 
-	def GetTrimmedFFT(self):
-		sample_count = len(self.trimmed_time_domain_samples)
-
-		k = np.arange(sample_count)
-		t = k / self.sampling_frequency
-		T = sample_count / self.sampling_frequency
-		frq = k / T
-
-		freq_domain_samples = abs(scipy.fftpack.fft(self.trimmed_time_domain_samples, sample_count))
-
-#		if len(frq) > len(freq_domain_samples):
-#			frq = frq[:-1]
-#		if len(frq) < len(freq_domain_samples):
-#			freq_domain_samples[:-1]
-
-
-		#return freq_domain_samples[:2000], frq[:2000]
-		return freq_domain_samples, frq
-
-	def GetTrimmedSlice(self):
-		return self.trimmed_time_domain_samples, range(len(self.trimmed_time_domain_samples))
 
 	# Trim portions of the time domain samples to remove beginning and ending silence as well as maybe some of the attack and release.
-	def Trim(self, amplitude_threshold = 0.01, anomaly_threshold = 1000):
+	def Trim(self):
+		attack_amplitude_threshold = 0.05
+		release_amplitude_threshold = 0.02
+		anomaly_threshold = 1000
 		wave_start_index, wave_end_index = None, None
 
-		#print("len(self.time_domain_samples)={}".format(len(self.time_domain_samples)))
+#		hilbert = np.abs(scipy.signal.hilbert(self.time_domain_samples))
+#		b, a = scipy.signal.butter(3, 0.001, btype='lowpass') # 24Hz (for 48k sample rate) 3rd order Butterworth lowpass filter
+#		zi = scipy.signal.lfilter_zi(b, a)
+#		zi = zi * self.time_domain_samples[0]
+#		self.characteristic_signal = scipy.signal.filtfilt(b, a, hilbert)
 
-		# First, we find the max amplitude.
-		max_amplitude = max(self.time_domain_samples)
-		min_amplitude = min(self.time_domain_samples)
+		rectified_signal = np.abs(self.time_domain_samples)
+		b, a = scipy.signal.butter(3, 0.001, btype='lowpass') # 24Hz (for 48k sample rate) 3rd order Butterworth lowpass filter
+		zi = scipy.signal.lfilter_zi(b, a)
+		zi = zi * self.time_domain_samples[0]	
+		self.characteristic_signal = scipy.signal.filtfilt(b, a, rectified_signal)
 
-		#print("max_amplitude={}".format(max_amplitude))
+		# First, we find the max amplitude of the characteristic signal
+		max_amplitude = max(self.characteristic_signal)
+		min_amplitude = min(self.characteristic_signal)
+
+
 
 		anomaly_count = 0
 
-		for index, sample in enumerate(self.time_domain_samples):
+		for index, sample in enumerate(self.characteristic_signal):
 			if wave_start_index == None:			
-				if (sample > amplitude_threshold * max_amplitude) or (sample < amplitude_threshold * min_amplitude):
+				#if (abs(sample) > amplitude_threshold * max_amplitude) or (abs(sample) < amplitude_threshold * min_amplitude):
+				if (abs(sample) > attack_amplitude_threshold * max_amplitude):
 					anomaly_count += 1
-					#print("index={}; sample={}; anomalies={}".format(index, sample, anomaly_count))
+					#print("index={}; abs(sample)={}; anomalies={}".format(index, abs(sample), anomaly_count))
+				else:
+					anomaly_count = 0
 
 				if anomaly_count >= anomaly_threshold:
-					wave_start_index = index - anomaly_threshold
+					wave_start_index = index - anomaly_threshold + 1
 					anomaly_count = 0
 			elif wave_end_index == None:
-				if (sample < amplitude_threshold * max_amplitude) and (sample > amplitude_threshold * min_amplitude):
+				#if (abs(sample) < amplitude_threshold * max_amplitude) and (abs(sample) > amplitude_threshold * min_amplitude):
+				if (abs(sample) < release_amplitude_threshold * max_amplitude):
 					anomaly_count += 1
-					#print("index={}; sample={}; anomalies={}".format(index, sample, anomaly_count))
+					#print("index={}; abs(sample)={}; anomalies={}".format(index, abs(sample), anomaly_count))
+				else:
+					anomaly_count = 0
 
 				if anomaly_count >= anomaly_threshold:
-					wave_end_index = index - anomaly_threshold
+					wave_end_index = index - anomaly_threshold + 1
 					anomaly_count = 0
 					break
 
-		#print("wave_start_index={}\nwave_end_index={}".format(wave_start_index, wave_end_index))
+		if wave_start_index == None:
+			wave_start_index = 0
+		if wave_end_index == None:
+			wave_end_index = len(self.time_domain_samples)
 
-		return self.time_domain_samples[wave_start_index:wave_end_index]
+		print("untrimmed length={}".format(len(self.time_domain_samples)))
+		print("wave_start_index={}".format(wave_start_index))
+		print("wave_end_index={}".format(wave_end_index))
+		print("max_amplitude={}".format(max_amplitude))
+
+		#anomaly_count = 0
+
+		#time_domain_d = np.gradient(self.time_domain_samples)
+		#time_domain_dd = np.gradient(time_domain_d)
+
+		#print("max_amplitude={}".format(max_amplitude))
+		#print(self.time_domain_samples[:20])
+		#print(time_domain_d[:20])
+		#print(time_domain_dd[:20])
+
+#		for index, sample in enumerate(self.time_domain_samples):
+#			if wave_start_index == None:			
+#				if (sample > amplitude_threshold * max_amplitude) or (sample < amplitude_threshold * min_amplitude):
+#					anomaly_count += 1
+#					#print("index={}; sample={}; anomalies={}".format(index, sample, anomaly_count))
+#				else:
+#					anomaly_count = 0
+#
+#				if anomaly_count >= anomaly_threshold:
+#					wave_start_index = index - anomaly_threshold
+#					anomaly_count = 0
+#			elif wave_end_index == None:
+#				if (sample < amplitude_threshold * max_amplitude) and (sample > amplitude_threshold * min_amplitude):
+#					anomaly_count += 1
+#					#print("index={}; sample={}; anomalies={}".format(index, sample, anomaly_count))
+#				else:
+#					anomaly_count = 0
+#
+#				if anomaly_count >= anomaly_threshold:
+#					wave_end_index = index - anomaly_threshold
+#					anomaly_count = 0
+#					break
+
+		# Now that the silence is trimmed, let's take a small clip from the center of the primary waveform to eliminate effects from attack, decay, and release.
+		# We probably want at least 100ms of sound, but let's start a bit higher.
+
+		#sample_count = wave_end_index - wave_start_index
+		#target_duration = 0.250 # aim for 250ms to start
+		#duration = (wave_end_index - wave_start_index) / self.sampling_frequency # in seconds
+		#print("duration of trimmed clip: {}".format(duration))
+		#print("start time: {}; end time: {}".format(wave_start_index / self.sampling_frequency, wave_end_index / self.sampling_frequency))
+
+		#if duration < target_duration:
+		#	print("Trimmed duration may be too short for accurate results. Continuing anyway.")
+
+		#target_sample_count = target_duration * self.sampling_frequency # The number of samples to get in order to have a sample of target_duration
+
+		#offset = int((sample_count - target_sample_count) / 2) # the amount to offset from each side to get a waveform of length target_duration from the center of the trimmed waveform
+
+
+
+		return self.time_domain_samples[wave_start_index:wave_end_index], wave_start_index / self.sampling_frequency, wave_end_index / self.sampling_frequency
 
 
 
@@ -251,8 +376,8 @@ class Waveform:
 def OpenWAVFile():
 	sound = Waveform()
 
-	file_name = filedialog.askopenfilename()
-	sound.LoadFromFile(file_name)
+	file_path = filedialog.askopenfilename()
+	sound.LoadFromFile(file_path)
 
 	fig = Figure(figsize=(5,5), dpi=100)
 	time_plot = fig.add_subplot(2, 1, 1)
@@ -264,11 +389,19 @@ def OpenWAVFile():
 	s_t = 0
 	e_t = 0.5
 
-	values, times = sound.GetTrimmedSlice()
-	time_plot.plot(times, values)
+	#values, times = sound.GetTrimmedWaveform()
+	#time_plot.plot(times, values)
 
-	values, freqs = sound.GetTrimmedFFT()
+	values, times = sound.GetWaveform()
+	time_plot.plot(times, values)
+	time_plot.plot(times, sound.characteristic_signal, color='orange')
+
+	time_plot.axvline(sound.trim_start, color='red')
+	time_plot.axvline(sound.trim_end, color='red')
+
+	values, freqs = sound.GetFFT()
 	freq_plot.plot(freqs, values)
+
 	#waveform_plot.plot(sound.GetTimeSlice(1.1, 1.2))
 	#fft_plot.plot(sound.frq, sound.freq_domain_samples)
 

@@ -1,5 +1,8 @@
 # Here
 *.wav
+*.aif
+*.aiff
+samples/
 *.zip
 
 # Windows image file caches

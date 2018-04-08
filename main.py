@@ -9,7 +9,7 @@ matplotlib.use('TkAgg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
 from matplotlib.figure import Figure
 
-#from pydub import 
+from pydub import AudioSegment
 
 from scipy.signal import hilbert
 
@@ -134,34 +134,42 @@ def SampleWidthDataFromBytes(byte_list, sample_width):
 	
 
 class Waveform:
-	def LoadFromFile(self, file_name):
-		if file_name[-4:].lower() == '.wav':
-			print("Loading .wav file: {}".format(file_name))
-			WAV = wave.open(file_name, 'rb')
+	def LoadFromFile(self, file_path):
+		if file_path[-4:].lower() == '.wav':
+			print("Loading .wav file: {}".format(file_path))
 
-			raw_bytes = np.fromstring(WAV.readframes(-1), 'Int8') # encode raw byte data as an array of signed 8-bit integers
+			wav_file = wave.open(file_path, 'rb')
 
-			self.channel_count 		= WAV.getnchannels()
-			self.sample_width 		= WAV.getsampwidth()
-			self.sampling_frequency	= WAV.getframerate()
-			self.frame_count		= WAV.getnframes()
-			self.compression_type	= WAV.getcomptype()
+			self.channel_count 		= wav_file.getnchannels()
+			self.sample_width 		= wav_file.getsampwidth()
+			self.sampling_frequency	= wav_file.getframerate()
+			self.frame_count		= wav_file.getnframes()
 
-			WAV.close()
+			raw_bytes = np.fromstring(wav_file.readframes(-1), 'Int8') # encode raw byte data as an array of signed 8-bit integers
+			self.time_domain_samples = SampleWidthDataFromBytes(raw_bytes, self.sample_width)
 
-		print("channel_count={}".format(self.channel_count))
+			wav_file.close()
+		elif file_path[-4:].lower() == '.mp3':
+			print("Loading .mp3 file: {}".format(file_path))
+
+			mp3_file = AudioSegment.from_file(file_path, format='mp3')
+
+			self.channel_count = mp3_file.channels
+			self.sample_width = mp3_file.sample_width
+			self.sampling_frequency = mp3_file.frame_rate
+			self.frame_count = mp3_file.frame_count
+
+			self.time_domain_samples = mp3_file.get_array_of_samples()
+		else:
+			print("Only .wav and .mp3 files are currently supported.")
+
 		if(self.channel_count != 1):
-			print("Non-mono audio files not supported.")
-			#return
-
-		# Only support 8- through 32-bit WAV files.
+			print("Non-mono audio files not supported. Undefined behavior may follow.")
 		if(self.sample_width < 1 or self.sample_width > 4):
-			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV files are currently supported.")
+			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV files are currently supported. Undefined behavior may follow.")
 
-		self.time_domain_samples = SampleWidthDataFromBytes(raw_bytes, self.sample_width)
 		self.trimmed_time_domain_samples, self.trim_start, self.trim_end = self.Trim()
 
-		#print(self.trimmed_time_domain_samples)
 
 	def GetWaveform(self):
 		return self.time_domain_samples, [k / self.sampling_frequency for k in range(len(self.time_domain_samples))]
@@ -368,8 +376,8 @@ class Waveform:
 def OpenWAVFile():
 	sound = Waveform()
 
-	file_name = filedialog.askopenfilename()
-	sound.LoadFromFile(file_name)
+	file_path = filedialog.askopenfilename()
+	sound.LoadFromFile(file_path)
 
 	fig = Figure(figsize=(5,5), dpi=100)
 	time_plot = fig.add_subplot(2, 1, 1)
@@ -391,7 +399,7 @@ def OpenWAVFile():
 	time_plot.axvline(sound.trim_start, color='red')
 	time_plot.axvline(sound.trim_end, color='red')
 
-	values, freqs = sound.GetTrimmedFFT()
+	values, freqs = sound.GetFFT()
 	freq_plot.plot(freqs, values)
 
 	#waveform_plot.plot(sound.GetTimeSlice(1.1, 1.2))

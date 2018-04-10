@@ -146,7 +146,7 @@ class Waveform:
 			self.frame_count		= wav_file.getnframes()
 
 			raw_bytes = np.fromstring(wav_file.readframes(-1), 'Int8') # encode raw byte data as an array of signed 8-bit integers
-			self.time_domain_samples = SampleWidthDataFromBytes(raw_bytes, self.sample_width)
+			raw_samples = SampleWidthDataFromBytes(raw_bytes, self.sample_width)
 
 			wav_file.close()
 		elif file_path[-4:].lower() == '.mp3':
@@ -159,12 +159,24 @@ class Waveform:
 			self.sampling_frequency = mp3_file.frame_rate
 			self.frame_count = mp3_file.frame_count
 
-			self.time_domain_samples = mp3_file.get_array_of_samples()
+			raw_samples = mp3_file.get_array_of_samples()
 		else:
 			print("Only .wav and .mp3 files are currently supported.")
+			return
 
-		if(self.channel_count != 1):
-			print("Non-mono audio files not supported. Undefined behavior may follow.")
+		if(self.channel_count == 1):
+			self.time_domain_samples = raw_samples
+		elif(self.channel_count == 2):
+			left_channel = raw_samples[::2]
+			right_channel = raw_samples[1::2]
+			
+			assert(len(left_channel) == len(right_channel))
+
+			self.time_domain_samples = [(left_channel[i] + right_channel[i]) * 0.5 for i in range(len(left_channel))]
+		else:
+			print("Audio files with more than 2 channels are not supported.")
+
+
 		if(self.sample_width < 1 or self.sample_width > 4):
 			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV files are currently supported. Undefined behavior may follow.")
 
@@ -277,8 +289,6 @@ class Waveform:
 		# First, we find the max amplitude of the characteristic signal
 		max_amplitude = max(self.characteristic_signal)
 		min_amplitude = min(self.characteristic_signal)
-
-
 
 		anomaly_count = 0
 

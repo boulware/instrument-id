@@ -187,6 +187,8 @@ class Waveform:
 		else:
 			print("Audio files with more than 2 channels are not supported.")
 
+		self.times = [k / self.sampling_frequency for k in range(len(self.time_domain_samples))]
+
 		if(self.sample_width < 1 or self.sample_width > 4):
 			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV and MP3 files are currently supported. Undefined behavior may follow.")
 
@@ -195,7 +197,7 @@ class Waveform:
 
 
 	def GetWaveform(self):
-		return self.time_domain_samples, [k / self.sampling_frequency for k in range(len(self.time_domain_samples))]
+		return self.time_domain_samples, self.times
 
 	def GetSTFT(self):
 		f, t, Zxx = scipy.signal.stft(self.trimmed_time_domain_samples, self.sampling_frequency, nperseg=pow(2,16))
@@ -266,6 +268,9 @@ class Waveform:
 
 		return self.time_domain_samples[start_k:end_k], [start_time + k / self.sampling_frequency for k in range(k_count)]
 
+	#def GetSliceFFTByIndex(self, start_index, end_index):
+		
+
 	def GetSliceFFT(self, start_time, end_time):
 		time_interval = end_time - start_time
 		sample_count = time_interval * self.sampling_frequency
@@ -294,8 +299,8 @@ class Waveform:
 
 	# Trim portions of the time domain samples to remove beginning and ending silence as well as maybe some of the attack and release.
 	def Trim(self):
-		attack_amplitude_threshold = 0.05
-		release_amplitude_threshold = 0.02
+		attack_amplitude_threshold = 0.10
+		release_amplitude_threshold = 0.10
 		anomaly_threshold = 1000
 		wave_start_index, wave_end_index = None, None
 
@@ -312,8 +317,8 @@ class Waveform:
 		self.characteristic_signal = scipy.signal.filtfilt(b, a, rectified_signal)
 
 		# First, we find the max amplitude of the characteristic signal
-		max_amplitude = max(self.characteristic_signal)
-		min_amplitude = min(self.characteristic_signal)
+		max_amplitude = np.amax(self.characteristic_signal)
+		min_amplitude = np.amin(self.characteristic_signal)
 
 		anomaly_count = 0
 
@@ -352,61 +357,27 @@ class Waveform:
 		print("wave_end_index={}".format(wave_end_index))
 		print("max_amplitude={}".format(max_amplitude))
 
-		#anomaly_count = 0
-
-		#time_domain_d = np.gradient(self.time_domain_samples)
-		#time_domain_dd = np.gradient(time_domain_d)
-
-		#print("max_amplitude={}".format(max_amplitude))
-		#print(self.time_domain_samples[:20])
-		#print(time_domain_d[:20])
-		#print(time_domain_dd[:20])
-
-#		for index, sample in enumerate(self.time_domain_samples):
-#			if wave_start_index == None:			
-#				if (sample > amplitude_threshold * max_amplitude) or (sample < amplitude_threshold * min_amplitude):
-#					anomaly_count += 1
-#					#print("index={}; sample={}; anomalies={}".format(index, sample, anomaly_count))
-#				else:
-#					anomaly_count = 0
-#
-#				if anomaly_count >= anomaly_threshold:
-#					wave_start_index = index - anomaly_threshold
-#					anomaly_count = 0
-#			elif wave_end_index == None:
-#				if (sample < amplitude_threshold * max_amplitude) and (sample > amplitude_threshold * min_amplitude):
-#					anomaly_count += 1
-#					#print("index={}; sample={}; anomalies={}".format(index, sample, anomaly_count))
-#				else:
-#					anomaly_count = 0
-#
-#				if anomaly_count >= anomaly_threshold:
-#					wave_end_index = index - anomaly_threshold
-#					anomaly_count = 0
-#					break
-
-		# Now that the silence is trimmed, let's take a small clip from the center of the primary waveform to eliminate effects from attack, decay, and release.
-		# We probably want at least 100ms of sound, but let's start a bit higher.
-
-		#sample_count = wave_end_index - wave_start_index
-		#target_duration = 0.250 # aim for 250ms to start
-		#duration = (wave_end_index - wave_start_index) / self.sampling_frequency # in seconds
-		#print("duration of trimmed clip: {}".format(duration))
-		#print("start time: {}; end time: {}".format(wave_start_index / self.sampling_frequency, wave_end_index / self.sampling_frequency))
-
-		#if duration < target_duration:
-		#	print("Trimmed duration may be too short for accurate results. Continuing anyway.")
-
-		#target_sample_count = target_duration * self.sampling_frequency # The number of samples to get in order to have a sample of target_duration
-
-		#offset = int((sample_count - target_sample_count) / 2) # the amount to offset from each side to get a waveform of length target_duration from the center of the trimmed waveform
-
-
-
 		return self.time_domain_samples[wave_start_index:wave_end_index], wave_start_index / self.sampling_frequency, wave_end_index / self.sampling_frequency
 
+	def FindStableWaveform(self):
+		variation_threshold = 0.2
+		global_amplitude_threshold = 0.4
 
+		# We probably need at least 10 full wavelengths for now. With a low-end of 100Hz, that gives us 100 waveforms per second => 10 waveforms per 0.1 seconds.
+		# So a 0.1 second window should work.
+		sample_window_width = int(0.1 * self.sampling_frequency)
 
+		global_max = np.amax(self.characteristic_signal)
+
+		for i in range(len(self.characteristic_signal) - sample_window_width):
+			subset = self.characteristic_signal[i:i + sample_window_width - 1]
+			max_value = np.amax(subset)
+			min_value = np.amin(subset)
+			average_value = np.average(subset)
+
+			if average_value >= global_amplitude_threshold * global_max:
+				if (max_value - min_value) / average_value <= variation_threshold:
+					return self.time_domain_samples[i:i + sample_window_width - 1], self.times[i:i + sample_window_width - 1]
 
 def OpenWAVFile():
 	sound = Waveform()
@@ -427,12 +398,15 @@ def OpenWAVFile():
 	#values, times = sound.GetTrimmedWaveform()
 	#time_plot.plot(times, values)
 
-	values, times = sound.GetWaveform()
+	#values, times = sound.GetWaveform()
+	values, times = sound.FindStableWaveform()
 	time_plot.plot(times, values)
-	time_plot.plot(times, sound.characteristic_signal, color='orange')
+	#time_plot.plot(times, sound.characteristic_signal, color='orange')
 
-	time_plot.axvline(sound.trim_start, color='red')
-	time_plot.axvline(sound.trim_end, color='red')
+	#time_plot.axvline(sound.trim_start, color='red')
+	#time_plot.axvline(sound.trim_end, color='red')
+
+	time_plot.axhline(color='purple', linewidth=0.8)
 
 
 	values, freqs = sound.GetFFT()

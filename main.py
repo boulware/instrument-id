@@ -132,6 +132,17 @@ def SampleWidthDataFromBytes(byte_list, sample_width):
 
 	return sample_width_ints
 	
+def AverageSTFT(data, to_print=False):
+	data_sum = np.sum(data, 1)
+	data_average = np.divide(data_sum, len(data))
+	data_magnitude = np.absolute(data_average)
+
+	if to_print:
+		print("data_sum:{}".format(data_sum))
+		print("data_average:{}".format(data_average))
+		print("data_magnitude:{}".format(data_magnitude))
+
+	return data_magnitude
 
 class Waveform:
 	def LoadFromFile(self, file_path):
@@ -176,15 +187,41 @@ class Waveform:
 		else:
 			print("Audio files with more than 2 channels are not supported.")
 
-
 		if(self.sample_width < 1 or self.sample_width > 4):
-			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV files are currently supported. Undefined behavior may follow.")
+			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV and MP3 files are currently supported. Undefined behavior may follow.")
 
 		self.trimmed_time_domain_samples, self.trim_start, self.trim_end = self.Trim()
 
 
+
 	def GetWaveform(self):
 		return self.time_domain_samples, [k / self.sampling_frequency for k in range(len(self.time_domain_samples))]
+
+	def GetSTFT(self):
+		f, t, Zxx = scipy.signal.stft(self.trimmed_time_domain_samples, self.sampling_frequency, nperseg=pow(2,16))
+		
+
+#		test_array = np.array([
+#			[1+1j, 2+2j, 3+3j],
+#			[4+4j, 5+5j, 6+6j],
+#			[10+10j, 11+11j, 12+12j],
+#			[1+1j, 2+2j, 3+3j]
+#			[1, 2],
+#			[2, 3],
+#			[5, 6]
+#		])
+#
+#		test_average = AverageSTFT(test_array, True)
+
+		#print(len(f))
+		#print(len(t))
+		#print(len(Zxx))
+		
+		averaged_stft = AverageSTFT(Zxx)
+
+		print(len(averaged_stft))
+
+		return averaged_stft, f
 
 	def GetFFT(self):
 		sample_count = len(self.time_domain_samples)
@@ -194,19 +231,7 @@ class Waveform:
 		T = sample_count / self.sampling_frequency
 		frq = k / T
 
-		#self.t = self.k / self.sampling_frequency # Creates discrete array of time values for our sampling frequency		
-		#self.k = np.arange(self.frame_count)
-		#self.T = self.frame_count / self.sampling_frequency # Sample length in seconds
-		#self.frq = self.k / self.T
-
-		freq_domain_samples = abs(scipy.fftpack.fft(self.time_domain_samples))
-
-		#print(freq_domain_samples)
-
-#		if len(frq) > len(freq_domain_samples):
-#			frq = frq[:-1]
-#		if len(frq) < len(freq_domain_samples):
-#			freq_domain_samples[:-1]
+		freq_domain_samples = abs(scipy.fftpack.rfft(self.time_domain_samples))
 
 		return freq_domain_samples, frq
 
@@ -409,7 +434,9 @@ def OpenWAVFile():
 	time_plot.axvline(sound.trim_start, color='red')
 	time_plot.axvline(sound.trim_end, color='red')
 
+
 	values, freqs = sound.GetFFT()
+	#values, freqs = sound.GetSTFT()
 	freq_plot.plot(freqs, values)
 
 	#waveform_plot.plot(sound.GetTimeSlice(1.1, 1.2))

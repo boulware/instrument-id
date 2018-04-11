@@ -2,6 +2,7 @@
 *.wav
 *.aif
 *.aiff
+*.pyc
 samples/
 *.zip
 

@@ -9,6 +9,12 @@ matplotlib.use('TkAgg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
 from matplotlib.figure import Figure
 
+import detect_peaks
+
+import os.path
+
+import json
+
 from pydub import AudioSegment
 
 from scipy.signal import hilbert
@@ -146,6 +152,8 @@ def AverageSTFT(data, to_print=False):
 
 class Waveform:
 	def LoadFromFile(self, file_path):
+		self.file_path = file_path
+
 		if file_path[-4:].lower() == '.wav':
 			print("Loading .wav file: {}".format(file_path))
 
@@ -361,7 +369,7 @@ class Waveform:
 
 	def FindStableWaveform(self):
 		variation_threshold = 0.2
-		global_amplitude_threshold = 0.4
+		global_amplitude_threshold = 0.75
 
 		# We probably need at least 10 full wavelengths for now. With a low-end of 100Hz, that gives us 100 waveforms per second => 10 waveforms per 0.1 seconds.
 		# So a 0.1 second window should work.
@@ -378,6 +386,13 @@ class Waveform:
 			if average_value >= global_amplitude_threshold * global_max:
 				if (max_value - min_value) / average_value <= variation_threshold:
 					return self.time_domain_samples[i:i + sample_window_width - 1], self.times[i:i + sample_window_width - 1]
+
+	def FindPeaks(self):
+		pass
+
+	def CacheCalculations(self):
+		pass
+
 
 def OpenWAVFile():
 	sound = Waveform()
@@ -410,8 +425,42 @@ def OpenWAVFile():
 
 
 	values, freqs = sound.GetFFT()
+
+	d_freq = freqs[1] - freqs[0]
+
+	window_width = 1000
+	window_std = 10
+	window = scipy.signal.gaussian(window_width, window_std)
+	convolved_fft = scipy.signal.convolve(values, window, mode='same')
+
+	d1_convolution = np.gradient(convolved_fft, d_freq)
+
+#	freq_plot.plot(freqs, d1_convolution, color='red')
+
+	d2_threshold = -1e6
+
+	#for e in convolved_fft:
+
+	#scipy.optimize.newton(d1_convolution, )
+	print("len(convolved_fft):{}".format(len(convolved_fft)))
+	peaks = scipy.signal.find_peaks_cwt(convolved_fft, np.arange(10,11))
+	#for e in 
+
+	minimum_peak_height = 10e8
+
+	peaks = detect_peaks.detect_peaks(convolved_fft, mph=10e8, mpd=1000)
+
+	peak_freqs = [freqs[peak] for peak in peaks]
+	peak_values = [convolved_fft[peak] for peak in peaks]
+
+
+	freq_plot.axhline(color='purple', linewidth=0.8)
+
 	#values, freqs = sound.GetSTFT()
-	freq_plot.plot(freqs, values)
+	freq_plot.plot(freqs, convolved_fft)
+	freq_plot.plot(freqs, values, color='green')
+
+	freq_plot.scatter(peak_freqs, peak_values, color='red', marker='o', s=10)
 
 	#waveform_plot.plot(sound.GetTimeSlice(1.1, 1.2))
 	#fft_plot.plot(sound.frq, sound.freq_domain_samples)

@@ -9,7 +9,7 @@ matplotlib.use('TkAgg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
 from matplotlib.figure import Figure
 
-import detect_peaks
+import sys
 
 import os.path
 
@@ -63,6 +63,8 @@ chunk = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
+
+A0_freq = 27.5
 
 def RecordMic():
 	p = pyaudio.PyAudio()
@@ -195,37 +197,23 @@ class Waveform:
 		else:
 			print("Audio files with more than 2 channels are not supported.")
 
-		self.times = [k / self.sampling_frequency for k in range(len(self.time_domain_samples))]
+		self.sample_count = len(self.time_domain_samples)
+		self.times = [k / self.sampling_frequency for k in range(self.sample_count)]
+		T = self.sample_count / self.sampling_frequency
+		self.freqs = [k / T for k in range(self.sample_count)]
+
+		#print("F_s={}".format(self.sampling_frequency))
 
 		if(self.sample_width < 1 or self.sample_width > 4):
 			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV and MP3 files are currently supported. Undefined behavior may follow.")
 
 		self.trimmed_time_domain_samples, self.trim_start, self.trim_end = self.Trim()
 
-
-
 	def GetWaveform(self):
 		return self.time_domain_samples, self.times
 
 	def GetSTFT(self):
 		f, t, Zxx = scipy.signal.stft(self.trimmed_time_domain_samples, self.sampling_frequency, nperseg=pow(2,16))
-		
-
-#		test_array = np.array([
-#			[1+1j, 2+2j, 3+3j],
-#			[4+4j, 5+5j, 6+6j],
-#			[10+10j, 11+11j, 12+12j],
-#			[1+1j, 2+2j, 3+3j]
-#			[1, 2],
-#			[2, 3],
-#			[5, 6]
-#		])
-#
-#		test_average = AverageSTFT(test_array, True)
-
-		#print(len(f))
-		#print(len(t))
-		#print(len(Zxx))
 		
 		averaged_stft = AverageSTFT(Zxx)
 
@@ -234,38 +222,31 @@ class Waveform:
 		return averaged_stft, f
 
 	def GetFFT(self):
-		sample_count = len(self.time_domain_samples)
+		#sample_count = len(self.time_domain_samples)
 
-		k = np.arange(sample_count)
-		t = k / self.sampling_frequency
-		T = sample_count / self.sampling_frequency
-		frq = k / T
+		#k = np.arange(sample_count)
+		#t = k / self.sampling_frequency
+		#T = sample_count / self.sampling_frequency
+		#frq = k / T
 
-		freq_domain_samples = abs(scipy.fftpack.rfft(self.time_domain_samples))
+		freq_domain_samples = abs(scipy.fftpack.fft(self.time_domain_samples))
 
-		return freq_domain_samples, frq
+		return freq_domain_samples, self.freqs
 
 	def GetTrimmedWaveform(self):
 		return self.trimmed_time_domain_samples, [x / self.sampling_frequency for x in range(len(self.trimmed_time_domain_samples))]
 		
 	def GetTrimmedFFT(self):
-		sample_count = len(self.trimmed_time_domain_samples)
+		#sample_count = len(self.trimmed_time_domain_samples)
 
-		k = np.arange(sample_count)
-		t = k / self.sampling_frequency
-		T = sample_count / self.sampling_frequency
-		frq = k / T
+		#k = np.arange(sample_count)
+		#t = k / self.sampling_frequency
+		#T = sample_count / self.sampling_frequency
+		#frq = k / T
 
-		freq_domain_samples = abs(scipy.fftpack.fft(self.trimmed_time_domain_samples, sample_count))
+		freq_domain_samples = abs(scipy.fftpack.fft(self.trimmed_time_domain_samples, self.sample_count))
 
-#		if len(frq) > len(freq_domain_samples):
-#			frq = frq[:-1]
-#		if len(frq) < len(freq_domain_samples):
-#			freq_domain_samples[:-1]
-
-
-		#return freq_domain_samples[:2000], frq[:2000]
-		return freq_domain_samples, frq
+		return freq_domain_samples, self.freqs
 
 	# Returns a slice of the waveform in time domain from start_time (in seconds) to end_time (in seconds)
 	def GetTimeSlice(self, start_time, end_time):
@@ -304,6 +285,11 @@ class Waveform:
 
 		return freq_domain_samples[0][:2000], frq[:2000]
 
+	# Find the closest corresponding index in the frequency domain array for the given freq
+	def FreqToIndex(self, target_freq):
+		for i, freq in enumerate(self.freqs):
+			if freq > target_freq:
+				return i
 
 	# Trim portions of the time domain samples to remove beginning and ending silence as well as maybe some of the attack and release.
 	def Trim(self):
@@ -319,7 +305,7 @@ class Waveform:
 #		self.characteristic_signal = scipy.signal.filtfilt(b, a, hilbert)
 
 		rectified_signal = np.abs(self.time_domain_samples)
-		b, a = scipy.signal.butter(3, 0.001, btype='lowpass') # 24Hz (for 48k sample rate) 3rd order Butterworth lowpass filter
+		b, a = scipy.signal.butter(3, self.FreqToNyquistRatio(100), btype='lowpass') # 24Hz (for 48k sample rate) 3rd order Butterworth lowpass filter
 		zi = scipy.signal.lfilter_zi(b, a)
 		zi = zi * self.time_domain_samples[0]	
 		self.characteristic_signal = scipy.signal.filtfilt(b, a, rectified_signal)
@@ -367,9 +353,13 @@ class Waveform:
 
 		return self.time_domain_samples[wave_start_index:wave_end_index], wave_start_index / self.sampling_frequency, wave_end_index / self.sampling_frequency
 
+	def FreqToNyquistRatio(self, freq):
+		nyquist_freq = self.sampling_frequency / 2
+		return freq / nyquist_freq
+
 	def FindStableWaveform(self):
 		variation_threshold = 0.2
-		global_amplitude_threshold = 0.75
+		global_amplitude_threshold = 0.25
 
 		# We probably need at least 10 full wavelengths for now. With a low-end of 100Hz, that gives us 100 waveforms per second => 10 waveforms per 0.1 seconds.
 		# So a 0.1 second window should work.
@@ -387,86 +377,127 @@ class Waveform:
 				if (max_value - min_value) / average_value <= variation_threshold:
 					return self.time_domain_samples[i:i + sample_window_width - 1], self.times[i:i + sample_window_width - 1]
 
+		print("Unable to find stable sub-waveform in waveform.")
+		return [], []
+
+
 	def FindPeaks(self):
 		pass
 
 	def CacheCalculations(self):
 		pass
 
+def DistanceFilter(data, peak_indices, minimum_peak_distance):
+	filtered_peak_indices = []
+	cluster_start_index = 0
+	cluster_peak_index = 0
 
-def OpenWAVFile():
+	print("mpd={}".format(minimum_peak_distance))
+	print("peaks remaining={}".format(len(peak_indices)))
+	print(peak_indices)
+
+	for i, peak_index in enumerate(peak_indices):
+		if i == 0:
+			cluster_start_index = peak_index
+			cluster_peak_index = peak_index
+			continue
+
+		if np.abs(peak_index - cluster_start_index) < minimum_peak_distance:
+			print("peak_index={}; cluster_start_index={}".format(peak_index, cluster_start_index))
+			if data[peak_index] > data[cluster_peak_index]:
+					cluster_peak_index = peak_index
+		else:
+			filtered_peak_indices.append(cluster_peak_index)			
+			cluster_start_index = peak_index
+			cluster_peak_index = peak_index
+
+		if i == len(peak_indices)-1 and cluster_start_index == peak_index:
+			filtered_peak_indices.append(cluster_peak_index)
+
+	if len(peak_indices) != len(filtered_peak_indices):
+		return DistanceFilter(data, filtered_peak_indices, minimum_peak_distance)
+	else:
+		return filtered_peak_indices
+
+def DetectPeaks(data, convolved_data, start_index, peak_threshold, minimum_peak_height, convolved_minimum_peak_height, minimum_peak_distance):
+	# We place peaks at the beginning and end of the spectrum
+	peak_indices = [] # All local mins or maxes, regardless of whether they meet the criteria
+	peak_indices.append(0)
+	peak_indices.append(len(data) - 1)
+
+	for i in np.arange(1, len(data) - 2):
+		if np.sign(data[i] - data[i-1]) == np.sign(data[i] - data[i+1]):
+			peak_indices.append(i)
+
+	peak_indices = np.sort(peak_indices)
+
+	filtered_peak_indices = []
+	peak_groups = zip(peak_indices, peak_indices[1:], peak_indices[2:])
+	for peak_group in peak_groups:
+		if (data[peak_group[1]] / data[peak_group[0]] > peak_threshold and data[peak_group[1]] / data[peak_group[2]] > peak_threshold):
+			if data[peak_group[1]] > minimum_peak_height:
+				if np.max(data[peak_group[0]:peak_group[2]]) > minimum_peak_height:
+					if np.max(convolved_data[peak_group[0]:peak_group[2]]) > convolved_minimum_peak_height:
+						filtered_peak_indices.append(peak_group[1])
+
+
+	distance_filtered_peak_indices = DistanceFilter(data, filtered_peak_indices, minimum_peak_distance)
+
+	return peak_indices, filtered_peak_indices, distance_filtered_peak_indices
+
+def OpenWAVFile(file_path = None):
 	sound = Waveform()
 
-	file_path = filedialog.askopenfilename()
+	if not file_path:
+		file_path = filedialog.askopenfilename()
+
 	sound.LoadFromFile(file_path)
 
 	fig = Figure(figsize=(5,5), dpi=100)
 	time_plot = fig.add_subplot(2, 1, 1)
 	freq_plot = fig.add_subplot(2, 1, 2)
 
-	#sound.GetTimeSlice(1.1, 1.11)
-	#print(sound.GetTimeSlice(1.1, 1.11))
+	freq_plot.set_xlim(xmin = -1000, xmax = sound.sampling_frequency//2)
 
-	s_t = 0
-	e_t = 0.5
+	times = sound.times
+	time_plot.plot(times, sound.time_domain_samples)
+	time_plot.plot(times, sound.characteristic_signal, color='orange')
 
-	#values, times = sound.GetTrimmedWaveform()
-	#time_plot.plot(times, values)
-
-	#values, times = sound.GetWaveform()
-	values, times = sound.FindStableWaveform()
-	time_plot.plot(times, values)
-	#time_plot.plot(times, sound.characteristic_signal, color='orange')
-
-	#time_plot.axvline(sound.trim_start, color='red')
-	#time_plot.axvline(sound.trim_end, color='red')
+	time_plot.axvline(sound.trim_start, color='red')
+	time_plot.axvline(sound.trim_end, color='red')
 
 	time_plot.axhline(color='purple', linewidth=0.8)
 
-
-	values, freqs = sound.GetFFT()
-
-	d_freq = freqs[1] - freqs[0]
+	values, freqs = sound.GetTrimmedFFT()
+	freq_plot.plot(freqs, values, color='green')
 
 	window_width = 1000
 	window_std = 10
 	window = scipy.signal.gaussian(window_width, window_std)
 	convolved_fft = scipy.signal.convolve(values, window, mode='same')
 
-	d1_convolution = np.gradient(convolved_fft, d_freq)
-
-#	freq_plot.plot(freqs, d1_convolution, color='red')
-
-	d2_threshold = -1e6
-
-	#for e in convolved_fft:
-
-	#scipy.optimize.newton(d1_convolution, )
-	print("len(convolved_fft):{}".format(len(convolved_fft)))
-	peaks = scipy.signal.find_peaks_cwt(convolved_fft, np.arange(10,11))
-	#for e in 
-
-	minimum_peak_height = 10e8
-
-	peaks = detect_peaks.detect_peaks(convolved_fft, mph=10e8, mpd=1000)
-
-	peak_freqs = [freqs[peak] for peak in peaks]
-	peak_values = [convolved_fft[peak] for peak in peaks]
-
-
 	freq_plot.axhline(color='purple', linewidth=0.8)
 
-	#values, freqs = sound.GetSTFT()
 	freq_plot.plot(freqs, convolved_fft)
-	freq_plot.plot(freqs, values, color='green')
+	#freq_plot.plot(freqs, np.gradient(convolved_fft), color='pink')
+	#freq_plot.plot(freqs, np.gradient(np.gradient(convolved_fft)), color='yellow')
 
-	freq_plot.scatter(peak_freqs, peak_values, color='red', marker='o', s=10)
+	peak_indices, filtered_peak_indices, distance_filtered_peak_indices = DetectPeaks(values, convolved_fft, sound.FreqToIndex(A0_freq), 1.5, np.max(values) / 100, np.max(convolved_fft) / 100, sound.FreqToIndex(20))
 
-	#waveform_plot.plot(sound.GetTimeSlice(1.1, 1.2))
-	#fft_plot.plot(sound.frq, sound.freq_domain_samples)
+	peak_freqs = [sound.freqs[i] for i in peak_indices]
+	filtered_peak_freqs = [sound.freqs[i] for i in filtered_peak_indices]
+	distance_filtered_peak_freqs = [sound.freqs[i] for i in distance_filtered_peak_indices]
+
+	peak_values = [values[i] for i in peak_indices]
+	filtered_peak_values = [values[i] for i in filtered_peak_indices]
+	distance_filtered_peak_values = [values[i] for i in distance_filtered_peak_indices]
+
+	#freq_plot.scatter(peak_freqs, peak_values, color='red', marker='o', s=16, zorder=10)
+	freq_plot.scatter(filtered_peak_freqs, filtered_peak_values, color='blue', marker='o', s=8, zorder=11)
+	freq_plot.scatter(distance_filtered_peak_freqs, distance_filtered_peak_values, color='white', marker='o', s=4, zorder=12)
 
 	canvas = FigureCanvasTkAgg(fig, master=root)
-	canvas.show()
+	canvas.draw()
 	canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
 	toolbar = NavigationToolbar2TkAgg(canvas, root)
@@ -489,5 +520,8 @@ filemenu.add_cascade(label="Export...", command=ExportCSV, underline=0)
 filemenu.add_cascade(label="Record", command=RecordMic, underline=0)
 menubar.add_cascade(label="File", menu=filemenu)
 root.config(menu=menubar)
+
+if len(sys.argv) == 2:
+	OpenWAVFile(sys.argv[1])
 
 root.mainloop()

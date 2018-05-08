@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
+from tkinter import Button
 import wave
 import numpy as np
 from collections import namedtuple
@@ -25,6 +26,9 @@ import math
 import pyaudio
 import binascii
 import struct
+
+from pympler.tracker import SummaryTracker
+tracker = SummaryTracker()
 
 import sounddevice as sd
 
@@ -137,8 +141,8 @@ def FreqToNoteName(freq):
 
 	return '{}{}'.format(note_name, note_octave)
 
-freq = 531
-print(FreqToNoteName(freq))
+#freq = 531
+#print(FreqToNoteName(freq))
 
 def FindPeak(array):
 	pass
@@ -146,13 +150,10 @@ def FindPeak(array):
 np.set_printoptions(threshold=np.inf)
 
 root = tk.Tk()
-
 root.attributes('-zoomed', True)
 root.title("Instrument Identification")
-tab_control = ttk.Notebook(root)
-tab1 = ttk.Frame(tab_control)      
-tab_control.add(tab1, text='Tab 1')
-tab_control.pack(expand=1, fill="both")
+notebook = CustomNotebook(width=200, height=200)
+notebook.pack(side="top", fill="both", expand=True)
 
 file = {}
 fft_raw_data = []
@@ -174,7 +175,7 @@ class Waveform:
 						frames_per_buffer	= chunk)
 
 		mic_data = []
-		chunk_count = int(SAMPLE_RATE / chunk * 1.0)
+		chunk_count = int(SAMPLE_RATE / chunk * 4.0)
 
 		for i in range(0, chunk_count):
 			data = stream.read(chunk)
@@ -188,9 +189,9 @@ class Waveform:
 
 		# This only supports mono atm
 		raw_samples = [] # to store mic_data encoded as 16-bit signed integers
-		print(str(len(mic_data[2*i:(2*i)+2])))
-		for i in range(0, len(mic_data) // 2):
-			mic_ints += struct.unpack('<h', mic_data[2*i:(2*i)+2])
+		#print(str(len(mic_data[2*i:(2*i)+2])))
+		for i in range(0, len(raw_bytes) // 2):
+			raw_samples += struct.unpack('<h', raw_bytes[2*i:(2*i)+2])
 
 		self.channel_count 		= CHANNELS
 		self.sample_width 		= 2 # 16 bits
@@ -275,7 +276,7 @@ class Waveform:
 		
 		averaged_stft = AverageSTFT(Zxx)
 
-		print(len(averaged_stft))
+		#print(len(averaged_stft))
 
 		return averaged_stft, f
 
@@ -360,7 +361,7 @@ class Waveform:
 			return index
 
 	def IndexToFreq(self, target_index):
-		return self.freqs[target_index]
+		return self.freqs[int(target_index)]
 
 	# Trim portions of the time domain samples to remove beginning and ending silence as well as maybe some of the attack and release.
 	def Trim(self):
@@ -417,10 +418,10 @@ class Waveform:
 		if wave_end_index == None:
 			wave_end_index = len(self.time_samples)
 
-		print("untrimmed length={}".format(len(self.time_samples)))
-		print("wave_start_index={}".format(wave_start_index))
-		print("wave_end_index={}".format(wave_end_index))
-		print("max_amplitude={}".format(max_amplitude))
+		#print("untrimmed length={}".format(len(self.time_samples)))
+		#print("wave_start_index={}".format(wave_start_index))
+		#print("wave_end_index={}".format(wave_end_index))
+		#print("max_amplitude={}".format(max_amplitude))
 
 		return self.time_samples[wave_start_index:wave_end_index], wave_start_index / self.sampling_frequency, wave_end_index / self.sampling_frequency
 
@@ -451,7 +452,7 @@ class Waveform:
 		print("Unable to find stable sub-waveform in waveform.")
 		return [], []
 
-	def DetectFreqPeaks(self, rising_threshold = 0.01, falling_threshold = 0.5, peak_amplitude_threshold_ratio = 0.02):
+	def DetectFreqPeaks(self, rising_threshold = 0.01, falling_threshold = 0.75, peak_amplitude_threshold_ratio = 0.05):
 		try:
 			self.freq_samples
 		except:
@@ -462,10 +463,13 @@ class Waveform:
 		window = scipy.signal.gaussian(window_width, window_std)
 		self.convolved_fft = scipy.signal.convolve(self.freq_samples, window, mode='same')
 
+
 		rising_trigger_value = np.max(self.convolved_fft) * rising_threshold
 		amplitude_threshold_value = peak_amplitude_threshold_ratio * np.amax(self.freq_samples)
 
 		convolved_slope = np.diff(self.convolved_fft)
+
+		#print("len(convolved)={}; len(slope)={}".format(len(self.convolved_fft), len(convolved_slope)))
 
 		self.peak_freq_indices = []
 		self.begin_threshold_indices = []
@@ -474,8 +478,9 @@ class Waveform:
 		threshold_activated = False
 		convolved_local_max = -1
 
-		for index, convolved_value in enumerate(self.convolved_fft):
-			if convolved_value >= rising_trigger_value and not threshold_activated and convolved_slope[index] > 0:			
+		for index, convolved_value in enumerate(self.convolved_fft[:-1]):
+			#print(self.freqs[:10])
+			if convolved_value >= rising_trigger_value and not threshold_activated and convolved_slope[index] > 0:
 				start_index = index
 
 				threshold_activated = True				
@@ -483,9 +488,11 @@ class Waveform:
 
 			if convolved_value <= falling_threshold * convolved_local_max and threshold_activated and convolved_slope[index] < 0:
 				end_index = index
-				data_local_max = np.max(self.freq_samples[start_index:end_index])
-				if data_local_max >= amplitude_threshold_value:
-					self.peak_freq_indices.append(start_index + np.argmax(self.freq_samples[start_index:end_index]))
+				max_index = start_index + np.argmax(self.freq_samples[start_index:end_index])
+				data_local_max = self.freq_samples[max_index]
+				if data_local_max >= amplitude_threshold_value and self.freqs[max_index] >= A0_freq:
+					#print("index = {}; freqs[index] = {}".format(start_index + np.argmax(self.freq_samples[start_index:end_index]), self.freqs[index]))
+					self.peak_freq_indices.append(max_index)
 
 				threshold_activated = False
 				self.end_threshold_indices.append(index)
@@ -508,6 +515,11 @@ class Waveform:
 		except:
 			self.DetectFreqPeaks()
 
+		try:
+			self.fundamental_freq
+		except:
+			self.DetectFundamental()
+
 		fig, (ax_time, ax_freq) = plt.subplots(2, 1)
 
 		ax_time.plot(self.times, self.time_samples)
@@ -518,21 +530,25 @@ class Waveform:
 			ax_time.axvline(self.trim_end, color='red')
 			ax_time.axhline(color='purple', linewidth=0.8)
 
-		peak_freqs = [self.freqs[i] for i in self.peak_freq_indices]
-		peak_amplitudes = [self.freq_samples[i] for i in self.peak_freq_indices]
-		max_peak_amplitude = np.amax(self.freq_samples)
-		peak_ratios = [k / max_peak_amplitude for k in peak_amplitudes]
-
-		ax_freq.plot(self.freqs, self.freq_samples)
-		ax_freq.set_xlim(xmin = 0, xmax = self.freqs[self.peak_freq_indices[-1]] * 1.2)
-		ax_freq.set_ylim(ymin = 0, ymax = np.amax(self.freq_samples) * 1.2)
-
-		ax_freq.scatter(peak_freqs, peak_amplitudes, color='purple', marker='o', s=8, zorder=10)
-		annotate_font = {'size': 8}
-		matplotlib.rc('font', **annotate_font)
-		for i, _ in enumerate(peak_freqs):
-			ax_freq.annotate("{:.1f}\n({:.2f})".format(peak_freqs[i], peak_ratios[i]), xy=(peak_freqs[i], peak_amplitudes[i]), xytext=(5, 0), textcoords='offset pixels')
-
+		if len(self.peak_freq_indices) > 0:
+			peak_freqs = [self.freqs[i] for i in self.peak_freq_indices]
+			peak_amplitudes = [self.freq_samples[i] for i in self.peak_freq_indices]
+			max_peak_amplitude = np.amax(self.freq_samples)
+			peak_ratios = [k / max_peak_amplitude for k in peak_amplitudes]
+	
+			ax_freq.plot(self.freqs, self.freq_samples)
+			ax_freq.set_xlim(xmin = 0, xmax = self.freqs[self.peak_freq_indices[-1]] * 1.2)
+			ax_freq.set_ylim(ymin = 0, ymax = np.amax(self.freq_samples) * 1.2)
+	
+			ax_freq.scatter(peak_freqs, peak_amplitudes, color='purple', marker='o', s=8, zorder=10)
+			annotate_font = {'size': 8}
+			matplotlib.rc('font', **annotate_font)
+			for i, peak_freq in enumerate(peak_freqs):
+				if peak_freq == self.fundamental_freq:
+					ax_freq.annotate("{:.1f}\n({:.2f})".format(peak_freqs[i], peak_ratios[i]), xy=(peak_freqs[i], peak_amplitudes[i]), xytext=(5, 0), textcoords='offset pixels', color='red')
+				else:
+					ax_freq.annotate("{:.1f}\n({:.2f})".format(peak_freqs[i], peak_ratios[i]), xy=(peak_freqs[i], peak_amplitudes[i]), xytext=(5, 0), textcoords='offset pixels')
+	
 		if debug_plots == True:
 			ax_freq.plot(self.freqs, self.convolved_fft)
 
@@ -543,44 +559,133 @@ class Waveform:
 			ax_freq.scatter(begin_threshold_freqs, begin_threshold_amplitudes , color='green', marker='^', s=8, zorder=13)
 			ax_freq.scatter(end_threshold_freqs, end_threshold_amplitudes, color='red', marker='v', s=8, zorder=13)			
 
-		fig.show()	
+		#fig.show()
+
+		return fig
+
+	def DetectHarmonics(self):
+		try:
+			self.peak_freq_indices
+		except:
+			self.DetectFreqPeaks()
+
+		freq_max = self.freqs[self.peak_freq_indices[-1]] * 2 # Maximum frequency to check multiples of (set to Nyquist freq)
+		freq_displacement_means = []
+		#print([self.freqs[i] for i in self.peak_freq_indices])
+		for i, peak_index in enumerate(self.peak_freq_indices):
+			fundamental_freq = self.freqs[peak_index]
+			freq_multiples = np.arange(fundamental_freq*2, self.sampling_frequency / 2, fundamental_freq)
+
+			if len(freq_multiples) > 0:
+				freq_displacements = []
+				for comparison_index in self.peak_freq_indices:
+					if comparison_index != peak_index:
+						comparison_freq = self.freqs[comparison_index]
+						closest_freq_multiple_index = (np.abs(freq_multiples - comparison_freq)).argmin()
+						closest_freq_multiple = freq_multiples[closest_freq_multiple_index]
+
+						freq_displacements.append(abs(closest_freq_multiple - comparison_freq))
+
+						#print("\t{} [{}] = {}".format(comparison_freq, closest_freq_multiple, freq_displacements[-1]))
+
+				#print(freq_displacements)
+				freq_displacement_means.append(np.average(freq_displacements))
+				#print(freq_displacement_means)
+				#print(peak_index)
+				#print("{}Hz Peak Mean Displacement: {}".format(fundamental_freq, freq_displacement_means[i]))
+
+		for peak_number in np.arange(len(freq_displacement_means)):
+			fundamental_freq = self.freqs[self.peak_freq_indices[peak_number]]
+			#print("{}Hz Peak Mean Displacement: {}\n".format(fundamental_freq, freq_displacement_means[peak_number]))
+			for comparison_index in np.arange(len(freq_displacement_means)):
+				if peak_number != comparison_index:
+					comparison_freq = self.freqs[comparison_index]
+					#print("\t{}: {}".format(comparison_freq, freq))
+
+	def DetectFundamental(self):
+		try:
+			self.peak_freq_indices
+		except:
+			self.DetectFreqPeaks()
+
+		peak_pairs = zip(self.peak_freq_indices, self.peak_freq_indices[1:])
+		peak_distances_with_outliers = []
+		for peak_pair in peak_pairs:
+			peak_distances_with_outliers.append(self.freqs[np.abs(peak_pair[0] - peak_pair[1])])
+
+		peak_distance_mean_with_outliers = np.average(peak_distances_with_outliers)
+		peak_distances = [d for d in peak_distances_with_outliers if np.abs(d - peak_distance_mean_with_outliers) / peak_distance_mean_with_outliers <= 0.5 or np.abs(d - peak_distance_mean_with_outliers) / peak_distance_mean_with_outliers >= 2]
+		peak_distance_mean = np.average(peak_distances)
+
+		# If more than 50% of the peaks were outliers:
+		#print("{} vs {}".format(np.abs(len(peak_distances_with_outliers) - len(peak_distances)), 0.5 * len(peak_distances_with_outliers)))
+		if np.abs(len(peak_distances_with_outliers) - len(peak_distances)) >= 0.5 * len(peak_distances_with_outliers):
+			print("Peaks too ambiguous to determine a fundamental frequency")
+
+		#print("with outliers: {}".format(peak_distances_with_outliers))
+		#print("w/o outliers: {}".format(peak_distances))
+
+		peak_freqs = [self.freqs[i] for i in self.peak_freq_indices]
+		closest_peak_index = (np.abs(peak_freqs - peak_distance_mean)).argmin()
+		self.fundamental_freq = peak_freqs[closest_peak_index]
+
+		if np.abs(self.fundamental_freq - peak_distance_mean) / peak_distance_mean >= 0.25:
+			print("No valid fundamental frequency peak found")
+
+		#print("Closest peak: {}\nEstimated peak freq: {}".format(self.fundamental_freq, peak_distance_mean))
+
+		return self.fundamental_freq
+
+
 
 def RecordMic():
 	sound = Waveform()
-	sound.RecordMic()
+	sound.RecordFromMicrophone()
+	figure = sound.GeneratePlots()
 
-	fig, (ax_time, ax_freq) = plt.subplots(2, 1)
+	frame = tk.Frame(notebook)
+	notebook.add(frame, text="Recording")
 
-	fig = Figure(figsize=(5,5), dpi=100)
-	waveform_plot = fig.add_subplot(2, 1, 1)
-	fft_plot = fig.add_subplot(2, 1, 2)
+	canvas = FigureCanvasTkAgg(figure, frame)
+	canvas.draw()
+	canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
-	n = len(mic_ints) # number of samples
-	k = np.arange(n)
-	t = k / RATE # Creates discrete array of time values for our sampling frequency
-	T = n / RATE # Sample length in seconds
-	frq = k / T
-	frq = frq[range(n//2)]
+	toolbar = NavigationToolbar2TkAgg(canvas, frame)
+	toolbar.update()
+	canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+#	fig, (ax_time, ax_freq) = plt.subplots(2, 1)
+#
+#	fig = Figure(figsize=(5,5), dpi=100)
+#	waveform_plot = fig.add_subplot(2, 1, 1)
+#	fft_plot = fig.add_subplot(2, 1, 2)
+
+#	n = len(mic_ints) # number of samples
+#	k = np.arange(n)
+#	t = k / RATE # Creates discrete array of time values for our sampling frequency
+#	T = n / RATE # Sample length in seconds
+#	frq = k / T
+#	frq = frq[range(n//2)]
 	#frq = np.linspace(0.0, 1.0/(2.0*T), N/2)
 
 
 
-	global fft_raw_data
-	fft_raw_data = scipy.fftpack.fft(mic_ints)
-	fft_raw_data = fft_raw_data[range(n//2)]
-
-	print(str(len(t)))
-	print(str(len(mic_ints)))
-	waveform_plot.plot(t, mic_ints)
-	fft_plot.plot(frq, fft_raw_data)
-
-	canvas = FigureCanvasTkAgg(fig, master=root)
-	canvas.show()
-	canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-
-	toolbar = NavigationToolbar2TkAgg(canvas, root)
-	toolbar.update()
-	canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+#	global fft_raw_data
+#	fft_raw_data = scipy.fftpack.fft(mic_ints)
+#	fft_raw_data = fft_raw_data[range(n//2)]
+#
+#	print(str(len(t)))
+#	print(str(len(mic_ints)))
+#	waveform_plot.plot(t, mic_ints)
+#	fft_plot.plot(frq, fft_raw_data)
+#
+#	canvas = FigureCanvasTkAgg(fig, master=root)
+#	canvas.show()
+#	canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+#
+#	toolbar = NavigationToolbar2TkAgg(canvas, root)
+#	toolbar.update()
+#	canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
 # Convert a list of bytes to a corresponding list of samples (as signed ints) of appropriate byte width.
 def SampleWidthDataFromBytes(byte_list, sample_width):
@@ -604,86 +709,6 @@ def AverageSTFT(data, to_print=False):
 	return data_magnitude
 
 
-def DetectLocalPeaks(data):
-	min_indices = [0, len(data)-1]
-	max_indices = []
-
-	for i in np.arange(1, len(data)-2):
-		if data[i] < data[i] and data[i] < data[i+2]:
-			min_indices.append(i)		
-		elif data[i] > data[i-1] and data[i] > data[i+1]:
-			max_indices.append(i)
-
-	np.sort(min_indices)
-
-	return min_indices, max_indices
-
-def ThresholdFilterMaxima(convolved_data, threshold_value):
-	min_indices, max_indices = DetectLocalPeaks(convolved_data)
-
-def DistanceFilter(data, peak_indices, minimum_peak_distance):
-	filtered_peak_indices = []
-	cluster_start_index = 0
-	cluster_peak_index = 0
-
-	print("mpd={}".format(minimum_peak_distance))
-	print("peaks remaining={}".format(len(peak_indices)))
-	print(peak_indices)
-
-	for i, peak_index in enumerate(peak_indices):
-		if i == 0:
-			cluster_start_index = peak_index
-			cluster_peak_index = peak_index
-			continue
-
-		if np.abs(peak_index - cluster_start_index) < minimum_peak_distance:
-			print("peak_index={}; cluster_start_index={}".format(peak_index, cluster_start_index))
-			if data[peak_index] > data[cluster_peak_index]:
-					cluster_peak_index = peak_index
-		else:
-			filtered_peak_indices.append(cluster_peak_index)			
-			cluster_start_index = peak_index
-			cluster_peak_index = peak_index
-
-		if i == len(peak_indices)-1 and cluster_start_index == peak_index:
-			filtered_peak_indices.append(cluster_peak_index)
-
-	if len(peak_indices) != len(filtered_peak_indices):
-		return DistanceFilter(data, filtered_peak_indices, minimum_peak_distance)
-	else:
-		return filtered_peak_indices
-
-
-
-def oldDetectPeaks(data, convolved_data, start_index, peak_threshold, minimum_peak_height, convolved_minimum_peak_height, minimum_peak_distance):
-	# We place peaks at the beginning and end of the spectrum
-	peak_indices = [] # All local mins or maxes, regardless of whether they meet the criteria
-	peak_indices.append(0)
-	peak_indices.append(len(data) - 1)
-
-	for i in np.arange(1, len(data) - 2):
-		if np.sign(data[i] - data[i-1]) == np.sign(data[i] - data[i+1]):
-			peak_indices.append(i)
-
-	peak_indices = np.sort(peak_indices)
-
-	filtered_peak_indices = []
-	peak_groups = zip(peak_indices, peak_indices[1:], peak_indices[2:])
-	for peak_group in peak_groups:
-		if (data[peak_group[1]] / data[peak_group[0]] > peak_threshold and data[peak_group[1]] / data[peak_group[2]] > peak_threshold):
-			if data[peak_group[1]] > minimum_peak_height:
-				if np.max(data[peak_group[0]:peak_group[2]]) > minimum_peak_height:
-					if np.max(convolved_data[peak_group[0]:peak_group[2]]) > convolved_minimum_peak_height:
-						filtered_peak_indices.append(peak_group[1])
-
-
-	distance_filtered_peak_indices = DistanceFilter(data, filtered_peak_indices, minimum_peak_distance)
-
-	return peak_indices, filtered_peak_indices, distance_filtered_peak_indices
-
-
-
-
 
 def OpenWAVFile(file_path = None):
 	sound = Waveform()
@@ -695,54 +720,25 @@ def OpenWAVFile(file_path = None):
 
 	fig, (ax_time, ax_freq) = plt.subplots(2, 1)
 
-	#values, freqs = sound.GetTrimmedFFT()
+	#sound.DetectHarmonics()
+	#print(sound.DetectFundamental())
+	figure = sound.GeneratePlots()
 
-	sound.GeneratePlots()
+	#notebook.pack(side="top", fill="both", expand=True)
+	frame = tk.Frame(notebook)
+	file_name = os.path.basename(file_path)
+	notebook.add(frame, text=file_name)
+	#root.title(file_name)	
 
-	#sound.DetectFreqPeaks(0.01, 0.5, 0.05)
+	canvas = FigureCanvasTkAgg(figure, frame)
+	canvas.draw()
+	canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
-	#peak_freqs = [sound.freqs[i] for i in peak_indices]
-	#begin_threshold_freqs = [sound.freqs[i] for i in begin_threshold_indices]
-	#end_threshold_freqs = [sound.freqs[i] for i in end_threshold_indices]
-#
-#	#peak_values = [values[i] for i in peak_indices]
-#	#begin_threshold_values = [convolved_fft[i] for i in begin_threshold_indices]
-#	#end_threshold_values = [convolved_fft[i] for i in end_threshold_indices]
-#
-#	#max_peak_amplitude = np.amax(values)
-#	#peak_ratios = [k / max_peak_amplitude for k in peak_values]
-#	#ax_freq.scatter(peak_freqs, peak_values, color='purple', marker='o', s=8, zorder=10)
-#	#annotate_font = {'size': 8}
-#	#matplotlib.rc('font', **annotate_font)
-#	#for i, peak_freq in enumerate(peak_freqs):
-#	#	ax_freq.annotate("{:.1f}\n({:.2f})".format(peak_freq, peak_ratios[i]), xy=(peak_freq, peak_values[i]), xytext=(5, 0), textcoords='offset pixels')
-#	##freq_plot.scatter(filtered_peak_freqs, filtered_peak_values, color='blue', marker='o', s=8, zorder=11)
-#	##freq_plot.scatter(distance_filtered_peak_freqs, distance_filtered_peak_values, color='white', marker='o', s=4, zorder=12)
-#	#debug_plots = False
-#	#if debug_plots == True:
-#	#	ax_freq.plot(freqs, convolved_fft)	
-#	#	ax_freq.scatter(begin_threshold_freqs, begin_threshold_values, color='green', marker='^', s=8, zorder=13)
-#	#	ax_freq.scatter(end_threshold_freqs, end_threshold_values, color='red', marker='v', s=8, zorder=13)	
-#
-#	##ax_time.subplot(2, 1, 1)
-#	#ax_time.plot(sound.times, sound.time_samples)
-#	#ax_time.set_xlim(xmin = 0, xmax = sound.times[-1])	
-#	#if debug_plots == True:
-#	#	ax_time.plot(sound.times, sound.characteristic_signal, color='orange')
-#	#	ax_time.axvline(sound.trim_start, color='red')
-#	#	ax_time.axvline(sound.trim_end, color='red')
-#	#	ax_time.axhline(color='purple', linewidth=0.8)
-#
-#	##plt.subplot(2, 1, 2)
-#	#ax_freq.plot(freqs, values, color='grey')
-#	#ax_freq.set_xlim(xmin = 0, xmax = sound.sampling_frequency//2)
-#	#ax_freq.set_ylim(ymin = 0, ymax = np.amax(values) * 1.2)
-	#ax_freq.axhline(color='purple', linewidth=0.8)
+	toolbar = NavigationToolbar2TkAgg(canvas, frame)
+	toolbar.update()
+	canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-	#plt.show()
-
-	#toolbar = NavigationToolbar2TkAgg(canvas, root)
-	#toolbar.update()
+	plt.close("all")
 
 def ExportCSV():
 	csv_filename = filedialog.asksaveasfilename(filetypes=[("Comma-separated values", 'csv')], defaultextension='csv')
@@ -756,12 +752,17 @@ def ExportCSV():
 menubar = tk.Menu(root)
 filemenu = tk.Menu(menubar, tearoff=0)
 filemenu.add_command(label="Open...", command=OpenWAVFile, underline=0)
-filemenu.add_cascade(label="Export...", command=ExportCSV, underline=0)
+#filemenu.add_cascade(label="Export...", command=ExportCSV, underline=0)
 filemenu.add_command(label="Record", command=RecordMic, underline=0)
-menubar.add_cascade(label="File", menu=filemenu)
+filemenu.add_command(label="Post memory", command=tracker.print_diff, underline=0)
+filemenu.add_command(label="Quit", command=root.quit, underline=0)
+menubar.add_cascade(label="File", menu=filemenu, underline=0)
 root.config(menu=menubar)
 
 if len(sys.argv) == 2:
 	OpenWAVFile(sys.argv[1])
 
+#Button(root, text="Quit", command=root.quit).pack()
+
 root.mainloop()
+#plt.close("all")

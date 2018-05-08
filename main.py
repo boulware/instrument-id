@@ -291,6 +291,9 @@ class Waveform:
 			if freq > target_freq:
 				return i
 
+	def IndexToFreq(self, target_index):
+		return self.freqs[target_index]
+
 	# Trim portions of the time domain samples to remove beginning and ending silence as well as maybe some of the attack and release.
 	def Trim(self):
 		attack_amplitude_threshold = 0.10
@@ -464,9 +467,9 @@ def oldDetectPeaks(data, convolved_data, start_index, peak_threshold, minimum_pe
 
 	return peak_indices, filtered_peak_indices, distance_filtered_peak_indices
 
-def old1DetectPeaks(data, convolved_data, rising_threshold, falling_threshold):
+def old1DetectPeaks(data, convolved_data, rising_threshold, falling_threshold, peak_amplitude_threshold_ratio):
 	rising_trigger_value = np.max(convolved_data) * rising_threshold
-	#falling_trigger_value = np.max(convolved_data) * falling_threshold
+	amplitude_threshold = peak_amplitude_threshold_ratio * np.amax(data)
 
 	convolved_slope = np.diff(convolved_data)
 
@@ -478,26 +481,28 @@ def old1DetectPeaks(data, convolved_data, rising_threshold, falling_threshold):
 	#print("len(data)={}; len(convolved_data)={}".format(len(data), len(convolved_data)))
 
 	threshold_activated = False
-	local_max = -1
+	convolved_local_max = -1
 
-	for index, value in enumerate(convolved_data):
-			if value >= rising_trigger_value and not threshold_activated and convolved_slope[index] > 0:
+	for index, convolved_value in enumerate(convolved_data):
+			if convolved_value >= rising_trigger_value and not threshold_activated and convolved_slope[index] > 0:			
+				start_index = index
+
 				threshold_activated = True				
 				begin_threshold_indices.append(index)				
 
-				start_index = index
+			if convolved_value <= falling_threshold * convolved_local_max and threshold_activated and convolved_slope[index] < 0:
+				end_index = index
+				data_local_max = np.max(data[start_index:end_index])
+				if data_local_max >= amplitude_threshold:
+					peak_indices.append(start_index + np.argmax(data[start_index:end_index]))
 
-			if value <= falling_threshold * local_max and threshold_activated and convolved_slope[index] < 0:
 				threshold_activated = False
 				end_threshold_indices.append(index)
-				local_max = -1
-
-				end_index = index
-				peak_indices.append(start_index + np.argmax(data[start_index:end_index]))
+				convolved_local_max = -1
 
 			if threshold_activated:
-				if value > local_max:
-					local_max = value
+				if convolved_value > convolved_local_max:
+					convolved_local_max = convolved_value
 
 	print("len(peak_indices)={}".format(len(peak_indices)))
 	print("peak_indices={}".format(peak_indices))
@@ -514,23 +519,15 @@ def OpenWAVFile(file_path = None):
 
 	sound.LoadFromFile(file_path)
 
-	fig = Figure(figsize=(5,5), dpi=100)
-	time_plot = fig.add_subplot(2, 1, 1)
-	freq_plot = fig.add_subplot(2, 1, 2)
+	#plt.gcf().clear()
 
-	freq_plot.set_xlim(xmin = -1000, xmax = sound.sampling_frequency//2)
+	fig, (ax_time, ax_freq) = plt.subplots(2, 1)	
 
-	times = sound.times
-	time_plot.plot(times, sound.time_domain_samples)
-	time_plot.plot(times, sound.characteristic_signal, color='orange')
-
-	time_plot.axvline(sound.trim_start, color='red')
-	time_plot.axvline(sound.trim_end, color='red')
-
-	time_plot.axhline(color='purple', linewidth=0.8)
+	#fig = Figure(figsize=(5,5), dpi=100)
+	#time_plot = fig.add_subplot(2, 1, 1)
+	#freq_plot = fig.add_subplot(2, 1, 2)
 
 	values, freqs = sound.GetTrimmedFFT()
-	freq_plot.plot(freqs, values, color='grey')
 
 	window_width = 1000
 	window_std = A0_freq / 2
@@ -539,14 +536,11 @@ def OpenWAVFile(file_path = None):
 	convolved_fft[0] = 0 # Just a niceity for peak finding, probably unnecessary, but shouldn't hurt anything. Essentially 0-padding
 	convolved_fft[-1] = 0
 
-	freq_plot.axhline(color='purple', linewidth=0.8)
-
-	freq_plot.plot(freqs, convolved_fft)
 	#freq_plot.plot(freqs, np.gradient(convolved_fft), color='pink')
 	#freq_plot.plot(freqs, np.gradient(np.gradient(convolved_fft)), color='yellow')
 
 	#peak_indices, filtered_peak_indices, distance_filtered_peak_indices = oldDetectPeaks(values, convolved_fft, sound.FreqToIndex(A0_freq), 1.5, np.max(values) / 100, np.max(convolved_fft) / 100, sound.FreqToIndex(20))
-	peak_indices, begin_threshold_indices, end_threshold_indices = old1DetectPeaks(values, convolved_fft, 0.02, 0.5)
+	peak_indices, begin_threshold_indices, end_threshold_indices = old1DetectPeaks(values, convolved_fft, 0.01, 0.5, 0.05)
 
 	peak_freqs = [sound.freqs[i] for i in peak_indices]
 	#filtered_peak_freqs = [sound.freqs[i] for i in filtered_peak_indices]
@@ -560,19 +554,40 @@ def OpenWAVFile(file_path = None):
 	begin_threshold_values = [convolved_fft[i] for i in begin_threshold_indices]
 	end_threshold_values = [convolved_fft[i] for i in end_threshold_indices]
 
-	freq_plot.scatter(peak_freqs, peak_values, color='purple', marker='o', s=16, zorder=10)
+	max_peak_amplitude = np.amax(values)
+	peak_ratios = [k / max_peak_amplitude for k in peak_values]
+	ax_freq.scatter(peak_freqs, peak_values, color='purple', marker='o', s=8, zorder=10)
+	annotate_font = {'size': 8}
+	matplotlib.rc('font', **annotate_font)
+	for i, peak_freq in enumerate(peak_freqs):
+		ax_freq.annotate("{:.1f}\n({:.2f})".format(peak_freq, peak_ratios[i]), xy=(peak_freq, peak_values[i]), xytext=(5, 0), textcoords='offset pixels')
 	#freq_plot.scatter(filtered_peak_freqs, filtered_peak_values, color='blue', marker='o', s=8, zorder=11)
 	#freq_plot.scatter(distance_filtered_peak_freqs, distance_filtered_peak_values, color='white', marker='o', s=4, zorder=12)
-	freq_plot.scatter(begin_threshold_freqs, begin_threshold_values, color='green', marker='^', s=8, zorder=13)
-	freq_plot.scatter(end_threshold_freqs, end_threshold_values, color='red', marker='v', s=8, zorder=13)	
+	debug_plots = False
+	if debug_plots == True:
+		ax_freq.plot(freqs, convolved_fft)	
+		ax_freq.scatter(begin_threshold_freqs, begin_threshold_values, color='green', marker='^', s=8, zorder=13)
+		ax_freq.scatter(end_threshold_freqs, end_threshold_values, color='red', marker='v', s=8, zorder=13)	
 
-	canvas = FigureCanvasTkAgg(fig, master=root)
-	canvas.draw()
-	canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+	#ax_time.subplot(2, 1, 1)
+	ax_time.plot(sound.times, sound.time_domain_samples)
+	ax_time.set_xlim(xmin = 0, xmax = sound.times[-1])	
+	if debug_plots == True:
+		ax_time.plot(sound.times, sound.characteristic_signal, color='orange')
+		ax_time.axvline(sound.trim_start, color='red')
+		ax_time.axvline(sound.trim_end, color='red')
+		ax_time.axhline(color='purple', linewidth=0.8)
+
+	#plt.subplot(2, 1, 2)
+	ax_freq.plot(freqs, values, color='grey')
+	ax_freq.set_xlim(xmin = 0, xmax = sound.sampling_frequency//2)
+	ax_freq.set_ylim(ymin = 0, ymax = np.amax(values) * 1.2)
+	ax_freq.axhline(color='purple', linewidth=0.8)
+
+	plt.show()
 
 	toolbar = NavigationToolbar2TkAgg(canvas, root)
 	toolbar.update()
-	canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
 def ExportCSV():
 	csv_filename = filedialog.asksaveasfilename(filetypes=[("Comma-separated values", 'csv')], defaultextension='csv')

@@ -11,9 +11,13 @@ matplotlib.use('TkAgg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
 from matplotlib.figure import Figure
 
+import re
+
 import sys
 
 import os.path
+from os import listdir
+
 
 import json
 
@@ -125,13 +129,14 @@ class CustomNotebook(ttk.Notebook):
         })
     ])
 
-note_names = ['C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B']
+A4_freq = 440.0
+A4_midi_number = 69
+C4_midi_number = 60
+notes_per_octave = 12
+note_names = np.array(['C', 'Cs', 'D', 'Ds', 'E', 'F', 'Fs', 'G', 'Gs', 'A', 'As', 'B'])
 
-def FreqToNoteName(freq):
-	A4_freq = 440.0
-	A4_midi_number = 69
-	C4_midi_number = 60
-	notes_per_octave = 12
+def FreqToNote(freq):
+
 	midi_number = round(A4_midi_number + notes_per_octave * math.log(freq / A4_freq, 2))
 	
 	relative_midi_number_C4 = midi_number - C4_midi_number
@@ -141,8 +146,25 @@ def FreqToNoteName(freq):
 
 	return '{}{}'.format(note_name, note_octave)
 
-#freq = 531
-#print(FreqToNoteName(freq))
+def MidiNumberToFreq(midi_number):
+	return pow(2, (midi_number - A4_midi_number) / notes_per_octave) * A4_freq
+
+def NoteToFreq(name, octave):
+	#l = np.array([1, 2, 3])
+	#print(np.where(l == 1)[0])
+	#print(np.nonzero(note_names == name))
+	midi_number = C4_midi_number + (octave - 4) * notes_per_octave + np.where(note_names == name)[0][0]
+	f = pow(2, (midi_number - A4_midi_number) / notes_per_octave) * A4_freq
+
+	#print(f)
+	return f
+
+#for midi_number in np.arange(21, 108):
+#	print("{} -> {}".format(midi_number, MidiNumberToFreq(midi_number)))
+
+#for octave_number in np.arange(0, 9):
+#	for note_name in note_names:
+#		print("{}{} -> {}".format(note_name, octave_number, NoteToFreq(note_name, octave_number)))
 
 def FindPeak(array):
 	pass
@@ -204,7 +226,7 @@ class Waveform:
 		self.sample_count = len(self.time_samples)
 		self.times = [k / self.sampling_frequency for k in range(self.sample_count)]
 		T = self.sample_count / self.sampling_frequency
-		self.freqs = [k / T for k in range(self.sample_count)]
+		self.freqs = [k / (2 * T) for k in range(self.sample_count)]
 
 
 		if(self.sample_width < 1 or self.sample_width > 4):
@@ -259,7 +281,7 @@ class Waveform:
 		self.sample_count = len(self.time_samples)
 		self.times = [k / self.sampling_frequency for k in range(self.sample_count)]
 		T = self.sample_count / self.sampling_frequency
-		self.freqs = [k / T for k in range(self.sample_count)]
+		self.freqs = [k / (2 * T) for k in range(self.sample_count)]
 
 		#print("F_s={}".format(self.sampling_frequency))
 
@@ -452,7 +474,7 @@ class Waveform:
 		print("Unable to find stable sub-waveform in waveform.")
 		return [], []
 
-	def DetectFreqPeaks(self, rising_threshold = 0.01, falling_threshold = 0.75, peak_amplitude_threshold_ratio = 0.05):
+	def DetectFreqPeaks(self, rising_threshold = 0.01, falling_threshold = 0.75, peak_amplitude_threshold_ratio = 0.01):
 		try:
 			self.freq_samples
 		except:
@@ -569,7 +591,8 @@ class Waveform:
 		except:
 			self.DetectFreqPeaks()
 
-		freq_max = self.freqs[self.peak_freq_indices[-1]] * 2 # Maximum frequency to check multiples of (set to Nyquist freq)
+		#freq_max = self.freqs[self.peak_freq_indices[-1]] * 2 # Maximum frequency to check multiples of (set to Nyquist freq)
+		freq_max = self.sampling_frequency / 2
 		freq_displacement_means = []
 		#print([self.freqs[i] for i in self.peak_freq_indices])
 		for i, peak_index in enumerate(self.peak_freq_indices):
@@ -635,6 +658,101 @@ class Waveform:
 		#print("Closest peak: {}\nEstimated peak freq: {}".format(self.fundamental_freq, peak_distance_mean))
 
 		return self.fundamental_freq
+
+	def DetectHarmonics2(self):
+		try:
+			self.peak_freq_indices
+		except:
+			self.DetectFreqPeaks()
+
+		#max_testable_freq = self.sampling_frequency / 2
+		max_testable_freq = self.freqs[self.peak_freq_indices[-1]] + 1
+
+		peak_freqs = [self.freqs[f] for f in self.peak_freq_indices]
+		#print("peak_freqs={}".format(peak_freqs))
+
+		# Test 1: Multiples test;
+		# Assume that all peaks are an integer multiple of f_f
+		multiple_percentage_differences = []
+		for fundamental_freq_index in self.peak_freq_indices:
+			test_fundamental_freq = self.freqs[fundamental_freq_index]
+
+			freq_multiples = np.arange(test_fundamental_freq*2, max_testable_freq, test_fundamental_freq)
+
+			#print("Testing {}Hz as fundamental with multiples test...".format(test_fundamental_freq))
+			#print(freq_multiples)			
+
+			multiple_percentage_differences.append([])
+			if len(freq_multiples) > 0:			
+				for comparison_freq_index in [i for i in self.peak_freq_indices if i > fundamental_freq_index]:
+					comparison_freq = self.freqs[comparison_freq_index]
+					#print("\tComparing to {}Hz...".format(comparison_freq))
+
+					closest_multiple_freq = freq_multiples[(np.abs(freq_multiples - comparison_freq)).argmin()]
+					distance_to_multiple = np.abs(closest_multiple_freq - comparison_freq)
+					multiple_percentage_differences[-1].append(distance_to_multiple / closest_multiple_freq)
+
+					#print("\t\tNearest multiple is {} (d={}; {}%)".format(closest_multiple_freq, distance_to_multiple, multiple_percentage_differences[-1][-1] * 100))
+
+		print("Results:")
+		for peak_number, percentage_difference in enumerate(multiple_percentage_differences):
+			if len(percentage_difference) > 0:
+				average_percent = "{:.3f}".format(np.average(percentage_difference) * 100)
+			else:
+				average_percent = "n/a"
+			print("\tPeak #{} ({:.1f}Hz): {}%".format(peak_number, self.freqs[self.peak_freq_indices[peak_number]], average_percent))
+
+		print("------")
+
+		# Test 2: Distances test
+		# Assume that all frequency multiples of f_f (up to freq of the final peak) have a corresponding peak
+		distance_percentage_differences = []
+		for fundamental_freq_index in self.peak_freq_indices:
+			test_fundamental_freq = self.freqs[fundamental_freq_index]
+			freq_multiples = np.arange(test_fundamental_freq*2, max_testable_freq, test_fundamental_freq)
+			peak_freqs = [self.freqs[i] for i in self.peak_freq_indices]
+			#print(peak_freqs)
+
+			#print("Testing {}Hz as fundamental with distances test...".format(test_fundamental_freq))
+
+			distance_percentage_differences.append([])
+			for i, freq_multiple in enumerate(freq_multiples):
+				#print("\tTesting {}Hz (multiple {})...".format(freq_multiple, i+1)) # +1 because 0-indexed
+
+				#print("peak_freqs={}".format(peak_freqs))
+				#print("peak_freqs(-)={}".format([f for f in peak_freqs if f!=test_fundamental_freq]))
+				filtered_peak_freqs = [f for f in peak_freqs if f!=test_fundamental_freq] # remove fundamental from the list so it's not comparing to itself
+
+				nearest_peak_freq = filtered_peak_freqs[(np.abs(filtered_peak_freqs - freq_multiple)).argmin()]
+				distance_to_peak = np.abs(nearest_peak_freq - freq_multiple)
+				distance_percentage_differences[-1].append(distance_to_peak / nearest_peak_freq)
+
+				#print("\t\t Nearest peak is {}Hz (d={}; {}%)".format(nearest_peak_freq, distance_to_peak, distance_percentage_differences[-1][-1] * 100))
+
+		print("Results:")
+		for peak_number, percentage_difference in enumerate(distance_percentage_differences):
+			if len(percentage_difference) > 0:
+				average_percent = "{:.3f}".format(np.average(percentage_difference) * 100)
+			else:
+				average_percent = "n/a"
+			print("\tPeak #{} ({:.1f}Hz): {}%".format(peak_number, self.freqs[self.peak_freq_indices[peak_number]], average_percent))
+
+def ParseAudioFileName(file_name):
+	file_name_match = re.search('(\w*)_([a-zA-Z]{1,2})(\d)_', file_name)
+	if file_name_match:
+		instrument_name = file_name_match.group(1)
+		note_name = file_name_match.group(2)
+		octave_number = int(file_name_match.group(3))
+		return instrument_name, note_name, octave_number
+	else:
+		print("File name regex match failed.")
+		return "", "", ""
+
+	#NoteToFreq(note_name, octave_number)
+
+#def CheckFundamentalFrequencyWithFilename():
+
+
 
 
 
@@ -718,17 +836,29 @@ def OpenWAVFile(file_path = None):
 
 	sound.LoadFromFile(file_path)
 
-	fig, (ax_time, ax_freq) = plt.subplots(2, 1)
-
-	#sound.DetectHarmonics()
-	#print(sound.DetectFundamental())
-	figure = sound.GeneratePlots()
-
-	#notebook.pack(side="top", fill="both", expand=True)
 	frame = tk.Frame(notebook)
 	file_name = os.path.basename(file_path)
 	notebook.add(frame, text=file_name)
-	#root.title(file_name)	
+
+	fig, (ax_time, ax_freq) = plt.subplots(2, 1)
+
+	#sound.DetectHarmonics2(
+
+#	instrument_name, note_name, octave_number = ParseAudioFileName(file_name)
+#	print("file name data:")
+#	print("\tinstrument: {}".format(instrument_name))
+#	print("\tnote: {}{}".format(note_name, octave_number))
+#
+#	actual_fundamental = NoteToFreq(note_name, octave_number)
+#	detected_fundamental = sound.DetectFundamental()
+#	print("\n\tactual fundamental: {}Hz".format(actual_fundamental))
+#	print("\tdetected_fundamental: {}Hz".format(detected_fundamental))
+#	print()
+
+	figure = sound.GeneratePlots()
+
+	#notebook.pack(side="top", fill="both", expand=True)
+
 
 	canvas = FigureCanvasTkAgg(figure, frame)
 	canvas.draw()
@@ -740,6 +870,50 @@ def OpenWAVFile(file_path = None):
 
 	plt.close("all")
 
+def FundamentalFrequencyTest(file_path = None):
+	sound = Waveform()
+
+	if not file_path:
+		file_path = filedialog.askopenfilename()
+
+	sound.LoadFromFile(file_path)
+
+	#frame = tk.Frame(notebook)
+	#file_name = os.path.basename(file_path)
+	#notebook.add(frame, text=file_name)
+
+	#fig, (ax_time, ax_freq) = plt.subplots(2, 1)
+
+	#sound.DetectHarmonics2(
+
+	file_name = os.path.basename(file_path)
+	instrument_name, note_name, octave_number = ParseAudioFileName(file_name)
+	#print("file name data:")
+	print("\tinstrument: {}".format(instrument_name))
+	print("\tnote: {}{}".format(note_name, octave_number))
+
+	actual_fundamental = NoteToFreq(note_name, octave_number)
+	detected_fundamental = sound.DetectFundamental()
+	print("\n\tactual fundamental: {}Hz".format(actual_fundamental))
+	print("\tdetected_fundamental: {}Hz".format(detected_fundamental))
+	percentage_difference = np.abs(actual_fundamental - detected_fundamental) / actual_fundamental * 100
+	print("\tdifference: {:.2f}%".format(percentage_difference))
+
+	del sound
+
+	return percentage_difference
+
+def AnalyzeFolder():
+	folder_path = filedialog.askdirectory()
+
+	for file_name in listdir(folder_path):
+		file_path = folder_path + "/" + file_name
+		print("Analyzing {}...".format(file_path))
+
+		FundamentalFrequencyTest(file_path)
+
+
+
 def ExportCSV():
 	csv_filename = filedialog.asksaveasfilename(filetypes=[("Comma-separated values", 'csv')], defaultextension='csv')
 	with open(csv_filename, 'wt') as csv_file:
@@ -747,12 +921,12 @@ def ExportCSV():
 		for e in fft_raw_data:
 			csv_file.write(str(e))
 			csv_file.write(',\n')
-			#csv_file.write(np.array_str(fft_raw_data))
 
 menubar = tk.Menu(root)
 filemenu = tk.Menu(menubar, tearoff=0)
-filemenu.add_command(label="Open...", command=OpenWAVFile, underline=0)
-#filemenu.add_cascade(label="Export...", command=ExportCSV, underline=0)
+#filemenu.add_command(label="Open...", command=OpenWAVFile, underline=0)
+filemenu.add_command(label="Open...", command=FundamentalFrequencyTest, underline=0)
+filemenu.add_command(label="List files...", command=AnalyzeFolder, underline=0)
 filemenu.add_command(label="Record", command=RecordMic, underline=0)
 filemenu.add_command(label="Post memory", command=tracker.print_diff, underline=0)
 filemenu.add_command(label="Quit", command=root.quit, underline=0)
@@ -760,7 +934,7 @@ menubar.add_cascade(label="File", menu=filemenu, underline=0)
 root.config(menu=menubar)
 
 if len(sys.argv) == 2:
-	OpenWAVFile(sys.argv[1])
+	FundamentalFrequencyTest(sys.argv[1])
 
 #Button(root, text="Quit", command=root.quit).pack()
 

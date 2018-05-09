@@ -39,6 +39,7 @@ import sounddevice as sd
 #print(sd.query_devices())
 
 import scipy.fftpack
+import scipy.stats
 
 # https://stackoverflow.com/questions/39458337/is-there-a-way-to-add-close-buttons-to-tabs-in-tkinter-ttk-notebook
 class CustomNotebook(ttk.Notebook):
@@ -481,7 +482,7 @@ class Waveform:
 			self.GetTrimmedFFT()
 
 		window_width = 1000
-		window_std = A0_freq / 2
+		window_std = A0_freq
 		window = scipy.signal.gaussian(window_width, window_std)
 		self.convolved_fft = scipy.signal.convolve(self.freq_samples, window, mode='same')
 
@@ -625,7 +626,7 @@ class Waveform:
 					comparison_freq = self.freqs[comparison_index]
 					#print("\t{}: {}".format(comparison_freq, freq))
 
-	def DetectFundamental(self):
+	def DetectFundamentalOld(self):
 		try:
 			self.peak_freq_indices
 		except:
@@ -659,7 +660,16 @@ class Waveform:
 
 		return self.fundamental_freq
 
-	def DetectHarmonics2(self):
+	def Autocorrelate(self, x):
+	    autocorrelation = np.correlate(x, x, mode='full')
+	    #print(autocorrelation.size)
+	    result = autocorrelation[autocorrelation.size//2:].tolist()
+
+	    for i in np.arange(1, len(result) // 10):
+
+	    	print("{} -> {}".format(1 / self.times[i], result[i]))
+
+	def DetectFundamental(self):
 		try:
 			self.peak_freq_indices
 		except:
@@ -689,18 +699,52 @@ class Waveform:
 					#print("\tComparing to {}Hz...".format(comparison_freq))
 
 					closest_multiple_freq = freq_multiples[(np.abs(freq_multiples - comparison_freq)).argmin()]
-					distance_to_multiple = np.abs(closest_multiple_freq - comparison_freq)
-					multiple_percentage_differences[-1].append(distance_to_multiple / closest_multiple_freq)
+					distance_to_multiple = closest_multiple_freq - comparison_freq
+					multiple_percentage_differences[-1].append(distance_to_multiple / closest_multiple_freq * 100)
 
 					#print("\t\tNearest multiple is {} (d={}; {}%)".format(closest_multiple_freq, distance_to_multiple, multiple_percentage_differences[-1][-1] * 100))
 
-		print("Results:")
+
+#		print('\nMultiples test results:')
+#		multiples_p_values = []
+#		for peak_number, data_set in enumerate(multiple_percentage_differences):
+#			p = 1.0
+#			if len(data_set) >= 2:
+#				p = scipy.stats.ttest_1samp(data_set, 0)[1]
+#
+#			
+#			#np.append(multiples_p_values, p)
+#			multiples_p_values.append(p)
+
+
+#		multiples_p_values_n = np.array(multiples_p_values, dtype=[('peak_number', int), ('p', float)])
+#		multiples_p_values_filtered = multiples_p_values_n[multiples_p_values_n['p'] >= 0.0]
+#		multiples_p_values_sorted = np.sort(multiples_p_values_filtered, order='p')
+#		for peak_number, p in enumerate(multiples_p_values):
+#			print("\t{}) {:.1f}Hz Peak: p = {:.2E}".format(peak_number+1, peak_freqs[peak_number], p))		
+#		for i, (peak_number, p) in enumerate(multiples_p_values_sorted):
+#			print("\t{}) {:.1f}Hz Peak: p = {:.2E}".format(i+1, peak_freqs[peak_number], p))
+
+
+#		print("Results:")
+#		for peak_number, percentage_difference in enumerate(multiple_percentage_differences):
+#			if len(percentage_difference) > 0:
+#				average_percent = "{:.3f}".format(np.average(percentage_difference) * 100)
+#			else:
+#				average_percent = "n/a"
+#			print("\tPeak #{} ({:.1f}Hz): {}%".format(peak_number, self.freqs[self.peak_freq_indices[peak_number]], average_percent))
+
+		#print("Mean Squared Errors (multiples test):")
+
+		multiples_MSEs = []
 		for peak_number, percentage_difference in enumerate(multiple_percentage_differences):
 			if len(percentage_difference) > 0:
-				average_percent = "{:.3f}".format(np.average(percentage_difference) * 100)
+				MSE = MeanSquaredError(percentage_difference) * 100
+				multiples_MSEs.append(MSE)
 			else:
-				average_percent = "n/a"
-			print("\tPeak #{} ({:.1f}Hz): {}%".format(peak_number, self.freqs[self.peak_freq_indices[peak_number]], average_percent))
+				MSE = "n/a"
+				multiples_MSEs.append(-1)
+			#print("\tPeak #{} ({:.1f}Hz): {}%".format(peak_number, self.freqs[self.peak_freq_indices[peak_number]], MSE))
 
 		print("------")
 
@@ -721,21 +765,79 @@ class Waveform:
 
 				#print("peak_freqs={}".format(peak_freqs))
 				#print("peak_freqs(-)={}".format([f for f in peak_freqs if f!=test_fundamental_freq]))
-				filtered_peak_freqs = [f for f in peak_freqs if f!=test_fundamental_freq] # remove fundamental from the list so it's not comparing to itself
+				filtered_peak_freqs = [f for f in peak_freqs if f > test_fundamental_freq] # remove fundamental from the list so it's not comparing to itself
 
-				nearest_peak_freq = filtered_peak_freqs[(np.abs(filtered_peak_freqs - freq_multiple)).argmin()]
-				distance_to_peak = np.abs(nearest_peak_freq - freq_multiple)
-				distance_percentage_differences[-1].append(distance_to_peak / nearest_peak_freq)
+				if len(filtered_peak_freqs) > 0:
+					nearest_peak_freq = filtered_peak_freqs[(np.abs(filtered_peak_freqs - freq_multiple)).argmin()]
+					distance_to_peak = nearest_peak_freq - freq_multiple
+					distance_percentage_differences[-1].append(distance_to_peak / nearest_peak_freq)
 
-				#print("\t\t Nearest peak is {}Hz (d={}; {}%)".format(nearest_peak_freq, distance_to_peak, distance_percentage_differences[-1][-1] * 100))
+					#print("\t\t Nearest peak is {}Hz (d={}; {}%)".format(nearest_peak_freq, distance_to_peak, distance_percentage_differences[-1][-1] * 100))
 
-		print("Results:")
+#		print('\nDistances test results:')
+#		distance_p_values = []
+#		for peak_number, data_set in enumerate(distance_percentage_differences):
+#			p = 1.0
+#			if len(data_set) >= 2:
+#				p = scipy.stats.ttest_1samp(data_set, 0)[1]
+#			
+#			#distance_p_values.append((peak_number, p))
+#			distance_p_values.append(p)
+
+		#print("Mean Squared Errors (distance test):")
+		distances_MSEs = []
 		for peak_number, percentage_difference in enumerate(distance_percentage_differences):
 			if len(percentage_difference) > 0:
-				average_percent = "{:.3f}".format(np.average(percentage_difference) * 100)
+				MSE = MeanSquaredError(percentage_difference) * 100
+				distances_MSEs.append(MSE)
 			else:
-				average_percent = "n/a"
-			print("\tPeak #{} ({:.1f}Hz): {}%".format(peak_number, self.freqs[self.peak_freq_indices[peak_number]], average_percent))
+				MSE = "n/a"
+				distances_MSEs.append(-1)
+			#print("\tPeak #{} ({:.1f}Hz): {}%".format(peak_number, self.freqs[self.peak_freq_indices[peak_number]], MSE))			
+
+
+#		distance_p_values_n = np.array(distance_p_values, dtype=[('peak_number', int), ('p', float)])
+#		distance_p_values_filtered = distance_p_values_n[distance_p_values_n['p'] >= 0.0]
+#		distance_p_values_sorted = np.sort(distance_p_values_filtered, order='p')
+		
+#		for peak_number, p in enumerate(distance_p_values):
+#			print("\t{}) {:.1f}Hz Peak: p = {:.2E}".format(peak_number+1, peak_freqs[peak_number], p))
+
+#		#print("Results:")
+#		for peak_number, percentage_difference in enumerate(distance_percentage_differences):
+#			if len(percentage_difference) > 0:
+#				average_percent = "{:.3f}".format(np.average(percentage_difference) * 100)
+#			else:
+#				average_percent = "n/a"
+#			print("\tPeak #{} ({:.1f}Hz): {}%".format(peak_number, self.freqs[self.peak_freq_indices[peak_number]], average_percent))
+#
+#		combined_p_values = []
+#		for peak_number in np.arange(0, len(peak_freqs)):
+#			combined_p_values.append(multiples_p_values[peak_number] * distance_p_values[peak_number])
+#
+#		print("Combined p values...")
+#		#combined_p_values_sorted = np.sort(combined_p_values)[::-1]
+#		for i, combined_p_value in enumerate(combined_p_values):
+#			print("\t{}Hz: p = {}".format(peak_freqs[i], combined_p_value))
+
+		combined_MSEs = []
+		for peak_number in np.arange(len(peak_freqs)):
+			if multiples_MSEs[peak_number] > 0 and distances_MSEs[peak_number] > 0:
+				combined_MSEs.append(pow(multiples_MSEs[peak_number] * distances_MSEs[peak_number], 0.5))
+				#print("\t{}Hz: MSE_t = {}".format(peak_freqs[peak_number], combined_MSEs[peak_number]))
+			else:
+				combined_MSEs.append(-1)
+
+		combined_MSEs_n = np.array(combined_MSEs)
+		if len(combined_MSEs_n[combined_MSEs_n != -1]) > 0 and len(peak_freqs) > 0:
+			#print(peak_freqs)
+			#print(combined_MSEs_n)
+			self.fundamental_freq = peak_freqs[combined_MSEs_n[combined_MSEs_n != -1].argmin()]
+		else:
+			self.fundamental_freq = -1
+
+		return self.fundamental_freq			
+
 
 def ParseAudioFileName(file_name):
 	file_name_match = re.search('(\w*)_([a-zA-Z]{1,2})(\d)_', file_name)
@@ -751,6 +853,7 @@ def ParseAudioFileName(file_name):
 	#NoteToFreq(note_name, octave_number)
 
 #def CheckFundamentalFrequencyWithFilename():
+
 
 
 
@@ -826,6 +929,11 @@ def AverageSTFT(data, to_print=False):
 
 	return data_magnitude
 
+def MeanSquaredError(data):
+	data_squared = np.square(data)
+	MSE = np.sum(data_squared) / len(data)
+
+	return MSE
 
 
 def OpenWAVFile(file_path = None):
@@ -842,7 +950,8 @@ def OpenWAVFile(file_path = None):
 
 	fig, (ax_time, ax_freq) = plt.subplots(2, 1)
 
-	#sound.DetectHarmonics2(
+	#sound.Autocorrelate(sound.time_samples)
+	#sound.DetectHarmonics2()
 
 #	instrument_name, note_name, octave_number = ParseAudioFileName(file_name)
 #	print("file name data:")
@@ -855,7 +964,7 @@ def OpenWAVFile(file_path = None):
 #	print("\tdetected_fundamental: {}Hz".format(detected_fundamental))
 #	print()
 
-	figure = sound.GeneratePlots()
+	figure = sound.GeneratePlots(True)
 
 	#notebook.pack(side="top", fill="both", expand=True)
 
@@ -925,7 +1034,8 @@ def ExportCSV():
 menubar = tk.Menu(root)
 filemenu = tk.Menu(menubar, tearoff=0)
 #filemenu.add_command(label="Open...", command=OpenWAVFile, underline=0)
-filemenu.add_command(label="Open...", command=FundamentalFrequencyTest, underline=0)
+filemenu.add_command(label="Open...", command=OpenWAVFile, underline=0)
+filemenu.add_command(label="Analyze file", command=FundamentalFrequencyTest, underline=0)
 filemenu.add_command(label="List files...", command=AnalyzeFolder, underline=0)
 filemenu.add_command(label="Record", command=RecordMic, underline=0)
 filemenu.add_command(label="Post memory", command=tracker.print_diff, underline=0)
@@ -934,7 +1044,7 @@ menubar.add_cascade(label="File", menu=filemenu, underline=0)
 root.config(menu=menubar)
 
 if len(sys.argv) == 2:
-	FundamentalFrequencyTest(sys.argv[1])
+	OpenWAVFile(sys.argv[1])
 
 #Button(root, text="Quit", command=root.quit).pack()
 

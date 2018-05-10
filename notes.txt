@@ -1,0 +1,16 @@
+q_max=5
+Naive HPS with half-peak detection and no high pass filter => 83.9% success on violin(filtered)
+
+Naive HPS with half-peak detection + high-pass filter => 89.1% success on violin(filtered)
+
+Naive HPS with explicit removal of peaks below the freq of A0 (no high pass filter) => 99.4 success on violin(filtered) [only failed on very high notes; E7 or above]
+
+Naive HPS (explicit removal) => 95.9% success on trumpet(filtered) []
+
+q_max=5
+Naive HPS (explicit removal) => 99.4% success on violin(filtered) [very large majority failed on very high notes; E7 or above Ds7+]
+
+Naive HPS (Explicit removal) => 95.9% success on trumpet(filtered)
+
+Naive HPS (Explicit) => 89.7% success on flute(filtered)
+

@@ -1,0 +1,639 @@
+==========
+Instrument: trumpet
+Note: A4----------------	q_max=1.0	actual fundamental: 440.0Hz	detected_fundamental: 439.7786458333333Hz	percent difference: 0.0005030776515151945%----------------	q_max=2.0	actual fundamental: 440.0Hz	detected_fundamental: 439.32291666666663Hz	percent difference: 0.0015388257575758436%----------------	q_max=3.0	actual fundamental: 440.0Hz	detected_fundamental: 439.7786458333333Hz	percent difference: 0.0005030776515151945%----------------	q_max=4.0	actual fundamental: 440.0Hz	detected_fundamental: 439.7786458333333Hz	percent difference: 0.0005030776515151945%----------------	q_max=5.0	actual fundamental: 440.0Hz	detected_fundamental: 439.32291666666663Hz	percent difference: 0.0015388257575758436%----------------	q_max=6.0	actual fundamental: 440.0Hz	detected_fundamental: 439.32291666666663Hz	percent difference: 0.0015388257575758436%----------------	q_max=7.0	actual fundamental: 440.0Hz	detected_fundamental: 439.32291666666663Hz	percent difference: 0.0015388257575758436%----------------	q_max=8.0	actual fundamental: 440.0Hz	detected_fundamental: 439.32291666666663Hz	percent difference: 0.0015388257575758436%----------------	q_max=9.0	actual fundamental: 440.0Hz	detected_fundamental: 439.32291666666663Hz	percent difference: 0.0015388257575758436%----------------	q_max=10.0	actual fundamental: 440.0Hz	detected_fundamental: 439.32291666666663Hz	percent difference: 0.0015388257575758436%==========
+Instrument: trumpet
+Note: A4
+----------------
+	q_max=1.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=2.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=3.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=4.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=5.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=6.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=7.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=8.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=9.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=10.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+
+==========
+Instrument: trumpet
+Note: A4
+----------------
+	q_max=1.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=2.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=3.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=4.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=5.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=6.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=7.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=8.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=9.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=10.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+==========
+Instrument: trumpet
+Note: A4
+----------------
+	q_max=1.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=2.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=3.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=4.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=5.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=6.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=7.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=8.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=9.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=10.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+==========
+Instrument: violin
+Note: A6
+----------------
+	q_max=1.0
+	actual fundamental: 1760.0Hz
+	detected_fundamental: 3554.650042808219Hz
+	percent difference: 1.0196875243228518%
+----------------
+	q_max=2.0
+	actual fundamental: 1760.0Hz
+	detected_fundamental: 1777.4561215753424Hz
+	percent difference: 0.00991825089508092%
+----------------
+	q_max=3.0
+	actual fundamental: 1760.0Hz
+	detected_fundamental: 1777.1939212328766Hz
+	percent difference: 0.009769273427770807%
+----------------
+	q_max=4.0
+	actual fundamental: 1760.0Hz
+	detected_fundamental: 1777.1939212328766Hz
+	percent difference: 0.009769273427770807%
+----------------
+	q_max=5.0
+	actual fundamental: 1760.0Hz
+	detected_fundamental: 1777.1939212328766Hz
+	percent difference: 0.009769273427770807%
+----------------
+	q_max=6.0
+	actual fundamental: 1760.0Hz
+	detected_fundamental: 1777.1939212328766Hz
+	percent difference: 0.009769273427770807%
+----------------
+	q_max=7.0
+	actual fundamental: 1760.0Hz
+	detected_fundamental: 1777.1939212328766Hz
+	percent difference: 0.009769273427770807%
+----------------
+	q_max=8.0
+	actual fundamental: 1760.0Hz
+	detected_fundamental: 1777.1939212328766Hz
+	percent difference: 0.009769273427770807%
+----------------
+	q_max=9.0
+	actual fundamental: 1760.0Hz
+	detected_fundamental: 1777.1939212328766Hz
+	percent difference: 0.009769273427770807%
+----------------
+	q_max=10.0
+	actual fundamental: 1760.0Hz
+	detected_fundamental: 3.670804794520548Hz
+	percent difference: 0.9979143154576587%
+==========
+Instrument: violin
+Note: B5
+----------------
+	q_max=1.0
+	actual fundamental: 987.7666025122483Hz
+	detected_fundamental: 988.1704757462687Hz
+	percent difference: 0.00040887516645457555%
+----------------
+	q_max=2.0
+	actual fundamental: 987.7666025122483Hz
+	detected_fundamental: 978.1716417910449Hz
+	percent difference: 0.009713793417189781%
+----------------
+	q_max=3.0
+	actual fundamental: 987.7666025122483Hz
+	detected_fundamental: 978.1716417910449Hz
+	percent difference: 0.009713793417189781%
+----------------
+	q_max=4.0
+	actual fundamental: 987.7666025122483Hz
+	detected_fundamental: 989.0275186567164Hz
+	percent difference: 0.001276532473624049%
+----------------
+	q_max=5.0
+	actual fundamental: 987.7666025122483Hz
+	detected_fundamental: 975.0291511194031Hz
+	percent difference: 0.012895203543478005%
+----------------
+	q_max=6.0
+	actual fundamental: 987.7666025122483Hz
+	detected_fundamental: 989.0275186567164Hz
+	percent difference: 0.001276532473624049%
+----------------
+	q_max=7.0
+	actual fundamental: 987.7666025122483Hz
+	detected_fundamental: 989.0275186567164Hz
+	percent difference: 0.001276532473624049%
+----------------
+	q_max=8.0
+	actual fundamental: 987.7666025122483Hz
+	detected_fundamental: 989.0275186567164Hz
+	percent difference: 0.001276532473624049%
+----------------
+	q_max=9.0
+	actual fundamental: 987.7666025122483Hz
+	detected_fundamental: 989.0275186567164Hz
+	percent difference: 0.001276532473624049%
+----------------
+	q_max=10.0
+	actual fundamental: 987.7666025122483Hz
+	detected_fundamental: 989.0275186567164Hz
+	percent difference: 0.001276532473624049%
+==========
+Instrument: violin
+Note: C6
+----------------
+	q_max=1.0
+	actual fundamental: 1046.5022612023945Hz
+	detected_fundamental: 1058.810763888889Hz
+	percent difference: 0.011761563393424858%
+----------------
+	q_max=2.0
+	actual fundamental: 1046.5022612023945Hz
+	detected_fundamental: 1060.0260416666667Hz
+	percent difference: 0.012922839219414489%
+----------------
+	q_max=3.0
+	actual fundamental: 1046.5022612023945Hz
+	detected_fundamental: 1060.0260416666667Hz
+	percent difference: 0.012922839219414489%
+----------------
+	q_max=4.0
+	actual fundamental: 1046.5022612023945Hz
+	detected_fundamental: 1060.0260416666667Hz
+	percent difference: 0.012922839219414489%
+----------------
+	q_max=5.0
+	actual fundamental: 1046.5022612023945Hz
+	detected_fundamental: 1060.0260416666667Hz
+	percent difference: 0.012922839219414489%
+----------------
+	q_max=6.0
+	actual fundamental: 1046.5022612023945Hz
+	detected_fundamental: 1060.0260416666667Hz
+	percent difference: 0.012922839219414489%
+----------------
+	q_max=7.0
+	actual fundamental: 1046.5022612023945Hz
+	detected_fundamental: 1060.0260416666667Hz
+	percent difference: 0.012922839219414489%
+----------------
+	q_max=8.0
+	actual fundamental: 1046.5022612023945Hz
+	detected_fundamental: 1060.0260416666667Hz
+	percent difference: 0.012922839219414489%
+----------------
+	q_max=9.0
+	actual fundamental: 1046.5022612023945Hz
+	detected_fundamental: 1060.0260416666667Hz
+	percent difference: 0.012922839219414489%
+----------------
+	q_max=10.0
+	actual fundamental: 1046.5022612023945Hz
+	detected_fundamental: 1062.4565972222222Hz
+	percent difference: 0.015245390871393536%
+==========
+Instrument: violin
+Note: A3
+----------------
+	q_max=1.0
+	actual fundamental: 220.0Hz
+	detected_fundamental: 440.234375Hz
+	percent difference: 1.0010653409090908%
+----------------
+	q_max=2.0
+	actual fundamental: 220.0Hz
+	detected_fundamental: 440.234375Hz
+	percent difference: 1.0010653409090908%
+----------------
+	q_max=3.0
+	actual fundamental: 220.0Hz
+	detected_fundamental: 440.234375Hz
+	percent difference: 1.0010653409090908%
+----------------
+	q_max=4.0
+	actual fundamental: 220.0Hz
+	detected_fundamental: 220.1171875Hz
+	percent difference: 0.0005326704545454545%
+----------------
+	q_max=5.0
+	actual fundamental: 220.0Hz
+	detected_fundamental: 220.1171875Hz
+	percent difference: 0.0005326704545454545%
+----------------
+	q_max=6.0
+	actual fundamental: 220.0Hz
+	detected_fundamental: 220.1171875Hz
+	percent difference: 0.0005326704545454545%
+----------------
+	q_max=7.0
+	actual fundamental: 220.0Hz
+	detected_fundamental: 220.1171875Hz
+	percent difference: 0.0005326704545454545%
+----------------
+	q_max=8.0
+	actual fundamental: 220.0Hz
+	detected_fundamental: 220.1171875Hz
+	percent difference: 0.0005326704545454545%
+----------------
+	q_max=9.0
+	actual fundamental: 220.0Hz
+	detected_fundamental: 220.1171875Hz
+	percent difference: 0.0005326704545454545%
+----------------
+	q_max=10.0
+	actual fundamental: 220.0Hz
+	detected_fundamental: 220.1171875Hz
+	percent difference: 0.0005326704545454545%
+==========
+Instrument: violin
+Note: As6
+----------------
+	q_max=1.0
+	actual fundamental: 1864.6550460723597Hz
+	detected_fundamental: 1885.3515625Hz
+	percent difference: 0.011099380805707021%
+----------------
+	q_max=2.0
+	actual fundamental: 1864.6550460723597Hz
+	detected_fundamental: 1922.265625Hz
+	percent difference: 0.030896105448023257%
+----------------
+	q_max=3.0
+	actual fundamental: 1864.6550460723597Hz
+	detected_fundamental: 1896.7447916666665Hz
+	percent difference: 0.01720948100395269%
+----------------
+	q_max=4.0
+	actual fundamental: 1864.6550460723597Hz
+	detected_fundamental: 1916.3411458333333Hz
+	percent difference: 0.027718853344935426%
+----------------
+	q_max=5.0
+	actual fundamental: 1864.6550460723597Hz
+	detected_fundamental: 1895.8333333333333Hz
+	percent difference: 0.01672067298809307%
+----------------
+	q_max=6.0
+	actual fundamental: 1864.6550460723597Hz
+	detected_fundamental: 1922.265625Hz
+	percent difference: 0.030896105448023257%
+----------------
+	q_max=7.0
+	actual fundamental: 1864.6550460723597Hz
+	detected_fundamental: 1922.265625Hz
+	percent difference: 0.030896105448023257%
+----------------
+	q_max=8.0
+	actual fundamental: 1864.6550460723597Hz
+	detected_fundamental: 1922.265625Hz
+	percent difference: 0.030896105448023257%
+----------------
+	q_max=9.0
+	actual fundamental: 1864.6550460723597Hz
+	detected_fundamental: 3.1901041666666665Hz
+	percent difference: 0.9982891719444912%
+----------------
+	q_max=10.0
+	actual fundamental: 1864.6550460723597Hz
+	detected_fundamental: 3.1901041666666665Hz
+	percent difference: 0.9982891719444912%
+==========
+Instrument: violin
+Note: Cs5
+----------------
+	q_max=1.0
+	actual fundamental: 554.3652619537442Hz
+	detected_fundamental: 555.8840460526316Hz
+	percent difference: 0.00273968122305278%
+----------------
+	q_max=2.0
+	actual fundamental: 554.3652619537442Hz
+	detected_fundamental: 558.90625Hz
+	percent difference: 0.008191328638183582%
+----------------
+	q_max=3.0
+	actual fundamental: 554.3652619537442Hz
+	detected_fundamental: 558.90625Hz
+	percent difference: 0.008191328638183582%
+----------------
+	q_max=4.0
+	actual fundamental: 554.3652619537442Hz
+	detected_fundamental: 550.0411184210526Hz
+	percent difference: 0.007800170446200062%
+----------------
+	q_max=5.0
+	actual fundamental: 554.3652619537442Hz
+	detected_fundamental: 550.0411184210526Hz
+	percent difference: 0.007800170446200062%
+----------------
+	q_max=6.0
+	actual fundamental: 554.3652619537442Hz
+	detected_fundamental: 550.0411184210526Hz
+	percent difference: 0.007800170446200062%
+----------------
+	q_max=7.0
+	actual fundamental: 554.3652619537442Hz
+	detected_fundamental: 550.0411184210526Hz
+	percent difference: 0.007800170446200062%
+----------------
+	q_max=8.0
+	actual fundamental: 554.3652619537442Hz
+	detected_fundamental: 550.0411184210526Hz
+	percent difference: 0.007800170446200062%
+----------------
+	q_max=9.0
+	actual fundamental: 554.3652619537442Hz
+	detected_fundamental: 549.8396381578947Hz
+	percent difference: 0.008163613607208823%
+----------------
+	q_max=10.0
+	actual fundamental: 554.3652619537442Hz
+	detected_fundamental: 549.8396381578947Hz
+	percent difference: 0.008163613607208823%
+==========
+Instrument: violin
+Note: A4
+----------------
+	q_max=1.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 440.97770024271847Hz
+	percent difference: 0.0022220460061783405%
+----------------
+	q_max=2.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 440.97770024271847Hz
+	percent difference: 0.0022220460061783405%
+----------------
+	q_max=3.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 440.97770024271847Hz
+	percent difference: 0.0022220460061783405%
+----------------
+	q_max=4.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 440.97770024271847Hz
+	percent difference: 0.0022220460061783405%
+----------------
+	q_max=5.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 440.97770024271847Hz
+	percent difference: 0.0022220460061783405%
+----------------
+	q_max=6.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 440.97770024271847Hz
+	percent difference: 0.0022220460061783405%
+----------------
+	q_max=7.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 440.97770024271847Hz
+	percent difference: 0.0022220460061783405%
+----------------
+	q_max=8.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 440.97770024271847Hz
+	percent difference: 0.0022220460061783405%
+----------------
+	q_max=9.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 440.97770024271847Hz
+	percent difference: 0.0022220460061783405%
+----------------
+	q_max=10.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 440.97770024271847Hz
+	percent difference: 0.0022220460061783405%
+==========
+Instrument: violin
+Note: As3
+----------------
+	q_max=1.0
+	actual fundamental: 233.08188075904496Hz
+	detected_fundamental: 468.1693412162162Hz
+	percent difference: 1.008604614359533%
+----------------
+	q_max=2.0
+	actual fundamental: 233.08188075904496Hz
+	detected_fundamental: 233.82601351351352Hz
+	percent difference: 0.003192580873490636%
+----------------
+	q_max=3.0
+	actual fundamental: 233.08188075904496Hz
+	detected_fundamental: 233.82601351351352Hz
+	percent difference: 0.003192580873490636%
+----------------
+	q_max=4.0
+	actual fundamental: 233.08188075904496Hz
+	detected_fundamental: 233.82601351351352Hz
+	percent difference: 0.003192580873490636%
+----------------
+	q_max=5.0
+	actual fundamental: 233.08188075904496Hz
+	detected_fundamental: 233.82601351351352Hz
+	percent difference: 0.003192580873490636%
+----------------
+	q_max=6.0
+	actual fundamental: 233.08188075904496Hz
+	detected_fundamental: 233.82601351351352Hz
+	percent difference: 0.003192580873490636%
+----------------
+	q_max=7.0
+	actual fundamental: 233.08188075904496Hz
+	detected_fundamental: 233.82601351351352Hz
+	percent difference: 0.003192580873490636%
+----------------
+	q_max=8.0
+	actual fundamental: 233.08188075904496Hz
+	detected_fundamental: 233.82601351351352Hz
+	percent difference: 0.003192580873490636%
+----------------
+	q_max=9.0
+	actual fundamental: 233.08188075904496Hz
+	detected_fundamental: 233.82601351351352Hz
+	percent difference: 0.003192580873490636%
+----------------
+	q_max=10.0
+	actual fundamental: 233.08188075904496Hz
+	detected_fundamental: 233.82601351351352Hz
+	percent difference: 0.003192580873490636%
+==========
+Instrument: trumpet
+Note: A4
+----------------
+	q_max=1.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=2.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=3.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=4.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.7786458333333Hz
+	percent difference: 0.0005030776515151945%
+----------------
+	q_max=5.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=6.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=7.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=8.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=9.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%
+----------------
+	q_max=10.0
+	actual fundamental: 440.0Hz
+	detected_fundamental: 439.32291666666663Hz
+	percent difference: 0.0015388257575758436%

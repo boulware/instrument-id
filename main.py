@@ -18,6 +18,8 @@ import sys
 import os.path
 from os import listdir
 
+#import warnings
+#warnings.filterwarnings("ignore", category=DeprecationWarning) 
 
 import json
 
@@ -151,13 +153,9 @@ def MidiNumberToFreq(midi_number):
 	return pow(2, (midi_number - A4_midi_number) / notes_per_octave) * A4_freq
 
 def NoteToFreq(name, octave):
-	#l = np.array([1, 2, 3])
-	#print(np.where(l == 1)[0])
-	#print(np.nonzero(note_names == name))
 	midi_number = C4_midi_number + (octave - 4) * notes_per_octave + np.where(note_names == name)[0][0]
 	f = pow(2, (midi_number - A4_midi_number) / notes_per_octave) * A4_freq
 
-	#print(f)
 	return f
 
 #for midi_number in np.arange(21, 108):
@@ -237,9 +235,12 @@ class Waveform:
 
 	def LoadFromFile(self, file_path):
 		self.file_path = file_path
+		self.file_name = os.path.basename(file_path)
 
+		if not file_path:
+			return False
 		if file_path[-4:].lower() == '.wav':
-			print("Loading .wav file: {}".format(file_path))
+			#print("Loading .wav file: {}".format(file_path))
 
 			wav_file = wave.open(file_path, 'rb')
 
@@ -253,7 +254,7 @@ class Waveform:
 
 			wav_file.close()
 		elif file_path[-4:].lower() == '.mp3':
-			print("Loading .mp3 file: {}".format(file_path))
+			#print("Loading .mp3 file: {}".format(file_path))
 
 			mp3_file = AudioSegment.from_file(file_path, format='mp3')
 
@@ -265,7 +266,7 @@ class Waveform:
 			raw_samples = mp3_file.get_array_of_samples()
 		else:
 			print("Only .wav and .mp3 files are currently supported.")
-			return
+			return False
 
 		if(self.channel_count == 1):
 			self.time_samples = raw_samples
@@ -278,9 +279,10 @@ class Waveform:
 			self.time_samples = [(left_channel[i] + right_channel[i]) * 0.5 for i in range(len(left_channel))]
 		else:
 			print("Audio files with more than 2 channels are not supported.")
+			return False
 
 		self.sample_count = len(self.time_samples)
-		self.times = [k / self.sampling_frequency for k in range(self.sample_count)]
+		self.times = np.array([k / self.sampling_frequency for k in range(self.sample_count)])
 		T = self.sample_count / self.sampling_frequency
 		self.freqs = [k / (2 * T) for k in range(self.sample_count)]
 
@@ -288,8 +290,11 @@ class Waveform:
 
 		if(self.sample_width < 1 or self.sample_width > 4):
 			print("Audio file sample width is not supported. Only 8-, 16-, 24-, and 32-bit WAV and MP3 files are currently supported. Undefined behavior may follow.")
+			return False
 
 		self.trimmed_time_samples, self.trim_start, self.trim_end = self.Trim()
+
+		return True
 
 	def GetWaveform(self):
 		return self.time_samples, self.times
@@ -303,13 +308,14 @@ class Waveform:
 
 		return averaged_stft, f
 
-	def GetFFT(self):
+	def GenerateFFT(self):
 		#sample_count = len(self.time_samples)
 
 		#k = np.arange(sample_count)
 		#t = k / self.sampling_frequency
 		#T = sample_count / self.sampling_frequency
 		#frq = k / T
+
 
 		self.freq_samples = abs(scipy.fftpack.rfft(self.time_samples))
 
@@ -318,6 +324,7 @@ class Waveform:
 	def GetTrimmedWaveform(self):
 		return self.trimmed_time_samples, [x / self.sampling_frequency for x in range(len(self.trimmed_time_samples))]
 		
+	# This function doesn't work as is
 	def GetTrimmedFFT(self):
 		#sample_count = len(self.trimmed_time_samples)
 
@@ -329,6 +336,26 @@ class Waveform:
 		self.freq_samples = abs(scipy.fftpack.rfft(self.trimmed_time_samples, self.sample_count))
 
 		return self.freq_samples, self.freqs
+
+	def GenerateFFTConvolutions(self):
+		try:
+			self.freq_samples
+		except:
+			self.GenerateFFT()
+
+		try:
+			self.hp_freq_samples
+		except:
+			self.GenerateHighPassFFT()
+
+
+		window_width = 1000
+		window_std = A0_freq
+		window = scipy.signal.gaussian(window_width, window_std)
+
+		self.convolved_fft = scipy.signal.convolve(self.freq_samples, window, mode='same')
+		self.hp_convolved_fft = scipy.signal.convolve(self.hp_freq_samples, window, mode='same')
+
 
 	# Returns a slice of the waveform in time domain from start_time (in seconds) to end_time (in seconds)
 	def GetTimeSlice(self, start_time, end_time):
@@ -475,23 +502,30 @@ class Waveform:
 		print("Unable to find stable sub-waveform in waveform.")
 		return [], []
 
-	def DetectFreqPeaks(self, rising_threshold = 0.01, falling_threshold = 0.75, peak_amplitude_threshold_ratio = 0.01):
+	def DetectFreqPeaks(self, rising_threshold = 0.01, falling_threshold = 0.5, peak_amplitude_threshold_ratio = 0.01):
 		try:
 			self.freq_samples
 		except:
-			self.GetTrimmedFFT()
+			#self.GetTrimmedFFT()
+			self.GenerateFFT()
 
-		window_width = 1000
-		window_std = A0_freq
-		window = scipy.signal.gaussian(window_width, window_std)
-		self.convolved_fft = scipy.signal.convolve(self.freq_samples, window, mode='same')
+		try:
+			self.hp_freq_samples
+		except:
+			self.GenerateHighPassFFT()
+
+		try:
+			self.convolved_fft
+		except:
+			self.GenerateFFTConvolutions()
+
 
 
 		rising_trigger_value = np.max(self.convolved_fft) * rising_threshold
 		amplitude_threshold_value = peak_amplitude_threshold_ratio * np.amax(self.freq_samples)
 
 		convolved_slope = np.diff(self.convolved_fft)
-
+		#self.convolved_fft_2 = scipy.signal.convolve(convolved_slope, window, mode='same')
 		#print("len(convolved)={}; len(slope)={}".format(len(self.convolved_fft), len(convolved_slope)))
 
 		self.peak_freq_indices = []
@@ -531,49 +565,65 @@ class Waveform:
 		try:
 			self.freq_samples
 		except:
-			self.GetTrimmedFFT()
+			self.GenerateFFT()
 
 		try:
-			self.peak_indices
+			self.harmonic_product_spectrum
 		except:
-			self.DetectFreqPeaks()
+			self.HPSNaive(2)
+		#try:
+		#	self.peak_indices
+		#except:
+		#	self.DetectFreqPeaks()
 
-		try:
-			self.fundamental_freq
-		except:
-			self.DetectFundamental()
+		#try:
+		#	self.fundamental_freq
+		#except:
+		#	self.DetectFundamental()
 
-		fig, (ax_time, ax_freq) = plt.subplots(2, 1)
+		fig, (ax_time, ax_freq, ax_hps) = plt.subplots(3, 1)
 
 		ax_time.plot(self.times, self.time_samples)
-		ax_time.set_xlim(xmin = 0, xmax = self.times[-1])	
+		#downsampled_time_domain = scipy.signal.decimate(self.time_samples, 2)
+		#print("downsampled: {}; normal: {}".format(len(downsampled_time_domain), len(self.time_samples)))
+		#ax_time.plot(self.times[::2] / 2, downsampled_time_domain, color='green')
+		ax_time.set_xlim(xmin = 0, xmax = self.times[-1])
 		if debug_plots == True:
 			ax_time.plot(self.times, self.characteristic_signal, color='orange')
 			ax_time.axvline(self.trim_start, color='red')
 			ax_time.axvline(self.trim_end, color='red')
 			ax_time.axhline(color='purple', linewidth=0.8)
 
-		if len(self.peak_freq_indices) > 0:
-			peak_freqs = [self.freqs[i] for i in self.peak_freq_indices]
-			peak_amplitudes = [self.freq_samples[i] for i in self.peak_freq_indices]
-			max_peak_amplitude = np.amax(self.freq_samples)
-			peak_ratios = [k / max_peak_amplitude for k in peak_amplitudes]
-	
-			ax_freq.plot(self.freqs, self.freq_samples)
-			ax_freq.set_xlim(xmin = 0, xmax = self.freqs[self.peak_freq_indices[-1]] * 1.2)
-			ax_freq.set_ylim(ymin = 0, ymax = np.amax(self.freq_samples) * 1.2)
-	
-			ax_freq.scatter(peak_freqs, peak_amplitudes, color='purple', marker='o', s=8, zorder=10)
-			annotate_font = {'size': 8}
-			matplotlib.rc('font', **annotate_font)
-			for i, peak_freq in enumerate(peak_freqs):
-				if peak_freq == self.fundamental_freq:
-					ax_freq.annotate("{:.1f}\n({:.2f})".format(peak_freqs[i], peak_ratios[i]), xy=(peak_freqs[i], peak_amplitudes[i]), xytext=(5, 0), textcoords='offset pixels', color='red')
-				else:
-					ax_freq.annotate("{:.1f}\n({:.2f})".format(peak_freqs[i], peak_ratios[i]), xy=(peak_freqs[i], peak_amplitudes[i]), xytext=(5, 0), textcoords='offset pixels')
+		ax_freq.plot(self.freqs, self.freq_samples)
+
+		ax_hps.plot(self.freqs, self.harmonic_product_spectrum)
+		#print("len(HPSs)={}".format(len(self.harmonic_product_spectrums)))
+#		for spectrum in self.downsampled_spectrums:
+#			ax_freq.plot(self.freqs, spectrum)
+		#ax_freq.plot(self.freqs, self.convolved_fft, color='green')
+
+#		if len(self.peak_freq_indices) > 0:
+#			peak_freqs = [self.freqs[i] for i in self.peak_freq_indices]
+#			peak_amplitudes = [self.freq_samples[i] for i in self.peak_freq_indices]
+#			max_peak_amplitude = np.amax(self.freq_samples)
+#			peak_ratios = [k / max_peak_amplitude for k in peak_amplitudes]
+#	
+#			ax_freq.set_xlim(xmin = 0, xmax = self.freqs[self.peak_freq_indices[-1]] * 1.2)
+#			#ax_freq.set_ylim(ymin = 0, ymax = np.amax(self.freq_samples) * 1.2)
+#	
+#			ax_freq.scatter(peak_freqs, peak_amplitudes, color='purple', marker='o', s=8, zorder=10)
+#			annotate_font = {'size': 8}
+#			matplotlib.rc('font', **annotate_font)
+#			for i, peak_freq in enumerate(peak_freqs):
+#				if peak_freq == self.fundamental_freq:
+#					ax_freq.annotate("{:.1f}\n({:.2f})".format(peak_freqs[i], peak_ratios[i]), xy=(peak_freqs[i], peak_amplitudes[i]), xytext=(5, 0), textcoords='offset pixels', color='red')
+#				else:
+#					ax_freq.annotate("{:.1f}\n({:.2f})".format(peak_freqs[i], peak_ratios[i]), xy=(peak_freqs[i], peak_amplitudes[i]), xytext=(5, 0), textcoords='offset pixels')
 	
 		if debug_plots == True:
 			ax_freq.plot(self.freqs, self.convolved_fft)
+			ax_freq.plot(self.freqs[:len(self.convolved_fft_2)], self.convolved_fft_2)
+			ax_freq.set_ylim(ymin = -1000, ymax = np.amax(self.convolved_fft) * 1.2)
 
 			begin_threshold_freqs = [self.freqs[i] for i in self.begin_threshold_indices]
 			end_threshold_freqs = [self.freqs[i] for i in self.end_threshold_indices]		
@@ -591,6 +641,7 @@ class Waveform:
 			self.peak_freq_indices
 		except:
 			self.DetectFreqPeaks()
+			self.HighPassFFT()			
 
 		#freq_max = self.freqs[self.peak_freq_indices[-1]] * 2 # Maximum frequency to check multiples of (set to Nyquist freq)
 		freq_max = self.sampling_frequency / 2
@@ -659,6 +710,181 @@ class Waveform:
 		#print("Closest peak: {}\nEstimated peak freq: {}".format(self.fundamental_freq, peak_distance_mean))
 
 		return self.fundamental_freq
+
+	def HPSNaive(self, q_max):
+		try:
+			self.freq_samples
+		except:
+			self.GenerateFFT()
+
+		freq_samples = self.freq_samples
+
+		running_hps = [1] * len(freq_samples)
+		for q in np.linspace(1, q_max, q_max, dtype=int):
+			downsampled_freq_samples = scipy.signal.decimate(freq_samples, q)
+			padded_downsampled_freq_samples = np.pad(downsampled_freq_samples, (0, len(freq_samples) - len(downsampled_freq_samples)), mode='constant')
+			running_hps *= padded_downsampled_freq_samples
+
+		low_freq_cutoff = A0_freq
+		low_freq_cutoff_index = self.FreqToIndex(low_freq_cutoff)
+		self.harmonic_product_spectrum_unfiltered = running_hps
+		self.harmonic_product_spectrum_filtered = running_hps[low_freq_cutoff_index:]
+		self.harmonic_product_spectrum = np.pad(self.harmonic_product_spectrum_filtered, (len(self.harmonic_product_spectrum_unfiltered) - len(self.harmonic_product_spectrum_filtered), 0), mode='constant')
+
+		#for i in self.harmonic_product_spectrum:
+			#print(
+
+		fundamental_freq_index = np.argmax(self.harmonic_product_spectrum)
+		fundamental_freq = self.freqs[fundamental_freq_index]
+
+		half_peak_threshold = 0.2
+		peak_indices = DetectPeaks(self.harmonic_product_spectrum, 0, np.max(self.harmonic_product_spectrum) * half_peak_threshold)
+		#print([self.freqs[i] for i in peak_indices])
+
+		for peak_index in peak_indices:
+			if peak_index != fundamental_freq_index:
+				peak_freq = self.freqs[peak_index]
+				half_fundamental_freq = fundamental_freq / 2
+
+				freq_distance = abs(half_fundamental_freq - peak_freq)
+				#print("half={}; comparison_freq={}; distance={}".format(half_fundamental_freq, peak_freq, freq_distance))
+				if freq_distance < A0_freq: # If the peak freq is relatively close to half of "fundamental" freq
+					fundamental_freq_index = peak_index
+					fundamental_freq = self.freqs[fundamental_freq_index]
+					break
+
+		#print("fund={}".format(fundamental_freq))
+		self.fundamental_freq = fundamental_freq
+		return self.fundamental_freq
+
+	def DetectHarmonics(self):
+
+
+	def HPSNaiveHighPassed(self, q_max):
+		try:
+			self.freq_samples
+		except:
+			self.GenerateFFT()
+
+		freq_samples = self.hp_freq_samples
+
+		running_hps = [1] * len(freq_samples)
+		for q in np.linspace(1, q_max, q_max, dtype=int):
+			downsampled_freq_samples = scipy.signal.decimate(freq_samples, q)
+			padded_downsampled_freq_samples = np.pad(downsampled_freq_samples, (0, len(freq_samples) - len(downsampled_freq_samples)), mode='constant')
+			running_hps *= padded_downsampled_freq_samples
+
+		low_freq_cutoff = A0_freq
+		low_freq_cutoff_index = self.FreqToIndex(low_freq_cutoff)
+		self.harmonic_product_spectrum_unfiltered = running_hps
+		self.harmonic_product_spectrum_filtered = running_hps[low_freq_cutoff_index:]
+		self.harmonic_product_spectrum = np.pad(self.harmonic_product_spectrum_filtered, (len(self.harmonic_product_spectrum_unfiltered) - len(self.harmonic_product_spectrum_filtered), 0), mode='constant')
+
+		#for i in self.harmonic_product_spectrum:
+			#print(
+
+		fundamental_freq_index = np.argmax(self.harmonic_product_spectrum)
+		fundamental_freq = self.freqs[fundamental_freq_index]
+
+		half_peak_threshold = 0.2
+		peak_indices = DetectPeaks(self.harmonic_product_spectrum, 0, np.max(self.harmonic_product_spectrum) * half_peak_threshold)
+
+		for peak_index in peak_indices:
+			if peak_index != fundamental_freq_index:
+				peak_freq = self.freqs[peak_index]
+				half_fundamental_freq = fundamental_freq / 2
+
+				if abs(half_fundamental_freq - peak_freq) < A0_freq: # If the peak freq is relatively close to half of "fundamental" freq
+					fundamental_freq_index = peak_index
+					fundamental_freq = self.freqs[fundamental_freq_index]
+					break
+
+		return fundamental_freq
+
+
+
+	def GenerateHarmonicProductSpectrum(self):
+		try:
+			self.freq_samples
+		except:
+			#self.GetTrimmedFFT()
+			self.GenerateFFT()
+
+		try:
+			self.hp_freq_samples
+		except:
+			self.GenerateHighPassFFT()
+
+		self.GenerateFFTConvolution(self.hp_freq_samples)
+
+
+		self.downsampled_spectrums = [self.convolved_fft[:]]
+		self.harmonic_product_spectrums = [self.convolved_fft[:]]
+		single_peak_present = False
+		q = 1 # Downsampling factor
+		#detected_peak_freq = -1
+		harmonic_product_spectrum = list(self.hp_freq_samples) # Copied
+		for q in range(2, 6):
+			downsampled_freq_samples = scipy.signal.decimate(self.hp_freq_samples, q)
+			padded_downsampled_freq_samples = np.pad(downsampled_freq_samples, (0, len(self.hp_freq_samples) - len(downsampled_freq_samples)), mode='constant')
+			harmonic_product_spectrum *= padded_downsampled_freq_samples
+		
+		fundamental_freq = self.freqs[np.argmax(harmonic_product_spectrum)]
+		return fundamental_freq
+
+#
+#		while not single_peak_present:
+#			downsampled_freq_samples = scipy.signal.decimate(self.convolved_fft, q)
+#			padded_downsampled_freq_samples = np.pad(downsampled_freq_samples, (0, len(self.time_samples) - len(downsampled_freq_samples)), mode='constant')
+#			self.downsampled_spectrums.append(padded_downsampled_freq_samples)
+#			self.harmonic_product_spectrums.append(self.harmonic_product_spectrums[q-1] * padded_downsampled_freq_samples)
+#
+#			min_freq = A0_freq
+#			min_index = self.FreqToIndex(min_freq)
+#			current_hps_max = np.max(self.harmonic_product_spectrums[-1][min_index:])
+#			current_hps_max_index = np.argmax(self.harmonic_product_spectrums[-1])
+#			#peak_indices = DetectPeaks(self.harmonic_product_spectrums[-1], min_index, current_hps_max * 0.1)
+			#peak_freqs = [self.freqs[i] for i in peak_indices]
+			#print("q={}; peak_count={}; peaks={}".format(q, len(peak_indices), peak_freqs))
+
+
+			#peak_widths = [w for w in range(self.FreqToIndex(A0_freq / 4), self.FreqToIndex(A0_freq / 2))]
+			#peak_indices = scipy.signal.find_peaks_cwt(self.harmonic_product_spectrums[-1], peak_widths, min_snr=100)
+			#peak_freqs = [self.freqs[i] for i in peak_indices]
+			#print("q={}; peaks={}Hz".format(q, peak_freqs))
+#			if len(peak_indices) == 2 and 
+			#if len(peak_indices) == 1 and q > 2:
+			#	#print("Detected fundamental as {}".format(self.freqs[peak_indices[0]]))
+			#	self.detected_fundamental = self.freqs[peak_indices[0]]
+			#	single_peak_present = True
+#			if q > 6:
+#				self.detected_fundamental = None
+#				single_peak_present = True
+				#print("Unable to detect fundamental frequency using harmonic product spectrum.")
+
+#			if q == 6:
+#				self.detected_fundamental = self.freqs[current_hps_max_index]
+#				single_peak_present = True
+#
+#			q += 1
+#
+#		return self.detected_fundamental
+			#print(len(self.harmonic_product_spectrums))
+			#print("q={}; len(hps)={}; len(downsample_unpadded)={}; len(downsample_padded)={}".format(q, len(self.harmonic_product_spectrum), len(downsampled_freq_samples), len(padded_downsampled_freq_samples)))
+
+	def GenerateHighPassFFT(self):
+		# Set up initial conditions for HP filter
+		b, a = scipy.signal.butter(3, self.FreqToNyquistRatio(A0_freq / 2), btype='highpass')
+		#zi = scipy.signal.lfilter_zi(b, a)
+		#zi = zi * self.freq_samples[0]
+
+		self.hp_time_samples = scipy.signal.filtfilt(b, a, self.time_samples)
+		self.hp_freq_samples = abs(scipy.fftpack.rfft(self.hp_time_samples))
+		#self.hp_freq_samples = self.freq_samples
+
+
+
+
 
 	def Autocorrelate(self, x):
 	    autocorrelation = np.correlate(x, x, mode='full')
@@ -848,6 +1074,7 @@ def ParseAudioFileName(file_name):
 		return instrument_name, note_name, octave_number
 	else:
 		print("File name regex match failed.")
+		print("file_name={}".format(file_name))
 		return "", "", ""
 
 	#NoteToFreq(note_name, octave_number)
@@ -935,6 +1162,34 @@ def MeanSquaredError(data):
 
 	return MSE
 
+def NaiveHPSTestWaveform(waveform):
+	instrument_name, note_name, octave_number = ParseAudioFileName(waveform.file_name)
+#	print("data from file name:")
+#	print("\tinstrument: {}".format(instrument_name))
+#	print("\tnote: {}{}".format(note_name, octave_number))
+
+	log_data = "\n==========\nInstrument: {}\nNote: {}{}".format(instrument_name, note_name, octave_number)
+
+	q_max_percent_differences = {}
+	for q_max in np.linspace(1, 10, 10):
+		actual_fundamental = NoteToFreq(note_name, octave_number)
+		detected_fundamental = waveform.HPSNaive(q_max)
+		percent_difference = np.abs(actual_fundamental - detected_fundamental) / actual_fundamental
+
+
+		log_data += "\n----------------"
+		log_data += "\n\tq_max={}".format(q_max)
+		log_data += "\n\tactual fundamental: {}Hz".format(actual_fundamental)
+		log_data += "\n\tdetected_fundamental: {}Hz".format(detected_fundamental)
+		log_data += "\n\tpercent difference: {}%".format(percent_difference)
+
+		q_max_percent_differences[q_max] = percent_difference
+
+
+	with open("data.txt", "a") as data_file:
+		data_file.write(log_data)
+
+	return q_max_percent_differences
 
 def OpenWAVFile(file_path = None):
 	sound = Waveform()
@@ -942,42 +1197,46 @@ def OpenWAVFile(file_path = None):
 	if not file_path:
 		file_path = filedialog.askopenfilename()
 
-	sound.LoadFromFile(file_path)
+	if(sound.LoadFromFile(file_path)):
+		frame = tk.Frame(notebook)
+		file_name = os.path.basename(file_path)
+		notebook.add(frame, text=file_name)
 
-	frame = tk.Frame(notebook)
-	file_name = os.path.basename(file_path)
-	notebook.add(frame, text=file_name)
+		fig, (ax_time, ax_freq) = plt.subplots(2, 1)
 
-	fig, (ax_time, ax_freq) = plt.subplots(2, 1)
+		#sound.GenerateHarmonicProductSpectrum()
+		#sound.HPSNaive(3)
 
-	#sound.Autocorrelate(sound.time_samples)
-	#sound.DetectHarmonics2()
+		#sound.Autocorrelate(sound.time_samples)
+		#sound.DetectHarmonics2()
 
-#	instrument_name, note_name, octave_number = ParseAudioFileName(file_name)
-#	print("file name data:")
-#	print("\tinstrument: {}".format(instrument_name))
-#	print("\tnote: {}{}".format(note_name, octave_number))
+		sound.HPSNaive(5)
 #
-#	actual_fundamental = NoteToFreq(note_name, octave_number)
-#	detected_fundamental = sound.DetectFundamental()
-#	print("\n\tactual fundamental: {}Hz".format(actual_fundamental))
-#	print("\tdetected_fundamental: {}Hz".format(detected_fundamental))
-#	print()
+#		instrument_name, note_name, octave_number = ParseAudioFileName(file_name)
+#		print("file name data:")
+#		print("\tinstrument: {}".format(instrument_name))
+#		print("\tnote: {}{}".format(note_name, octave_number))
+#	
+#		actual_fundamental = NoteToFreq(note_name, octave_number)
+#		detected_fundamental = sound.HPSNaive(2)
+#		print("\n\tactual fundamental: {}Hz".format(actual_fundamental))
+#		print("\tdetected_fundamental: {}Hz".format(detected_fundamental))
+#		print()
+#
+		figure = sound.GeneratePlots()
 
-	figure = sound.GeneratePlots(True)
-
-	#notebook.pack(side="top", fill="both", expand=True)
+		#notebook.pack(side="top", fill="both", expand=True)
 
 
-	canvas = FigureCanvasTkAgg(figure, frame)
-	canvas.draw()
-	canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+		canvas = FigureCanvasTkAgg(figure, frame)
+		canvas.draw()
+		canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
-	toolbar = NavigationToolbar2TkAgg(canvas, frame)
-	toolbar.update()
-	canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+		toolbar = NavigationToolbar2TkAgg(canvas, frame)
+		toolbar.update()
+		canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-	plt.close("all")
+		plt.close("all")
 
 def FundamentalFrequencyTest(file_path = None):
 	sound = Waveform()
@@ -997,30 +1256,84 @@ def FundamentalFrequencyTest(file_path = None):
 
 	file_name = os.path.basename(file_path)
 	instrument_name, note_name, octave_number = ParseAudioFileName(file_name)
+	if instrument_name == "" or note_name == "" or octave_number == "":
+		return False
 	#print("file name data:")
-	print("\tinstrument: {}".format(instrument_name))
-	print("\tnote: {}{}".format(note_name, octave_number))
+	#print("\tinstrument: {}".format(instrument_name))
+	#print("\tnote: {}{}".format(note_name, octave_number))
 
 	actual_fundamental = NoteToFreq(note_name, octave_number)
-	detected_fundamental = sound.DetectFundamental()
-	print("\n\tactual fundamental: {}Hz".format(actual_fundamental))
-	print("\tdetected_fundamental: {}Hz".format(detected_fundamental))
-	percentage_difference = np.abs(actual_fundamental - detected_fundamental) / actual_fundamental * 100
-	print("\tdifference: {:.2f}%".format(percentage_difference))
+	#detected_fundamental = sound.GenerateHarmonicProductSpectrum()
+	detected_fundamental = sound.HPSNaive(5)
+	if detected_fundamental == None:
+		#print("-----------------")		
+		print("File: {}\n".format(file_name))
+		print("\tFound no proper peaks")
+		print("-----------------")
+		return None
+
+	ratio = detected_fundamental / actual_fundamental	
+	ratio_threshold = 0.1
+	success = True
+	if ratio < 0.9 or ratio > 1.1:
+		success = False
+		print("File: {}".format(file_path))
+		print("\n\tactual fundamental: {}Hz".format(actual_fundamental))
+		print("\tdetected_fundamental: {}Hz".format(detected_fundamental))
+
+		print("\tratio: {:.2f}".format(ratio))
+		print("-----------------")
 
 	del sound
 
-	return percentage_difference
+	return success
 
 def AnalyzeFolder():
 	folder_path = filedialog.askdirectory()
 
+	success_count = 0
+	total_count = 0
+	for file_name in listdir(folder_path):
+		waveform = Waveform()
+		file_path = folder_path + "/" + file_name
+
+		result = FundamentalFrequencyTest(file_path)
+		if result == True:
+			success_count += 1
+
+		total_count += 1
+
+	print("Success rate: {}/{} -> {}%".format(success_count, total_count, success_count/total_count*100))
+
+def AnalyzeFolderOld():
+	folder_path = filedialog.askdirectory()
+
+	print("-----------------")
+
+	success_count = 0
+	total_count = 0
 	for file_name in listdir(folder_path):
 		file_path = folder_path + "/" + file_name
-		print("Analyzing {}...".format(file_path))
+		#print("Analyzing {}...".format(file_path))
 
-		FundamentalFrequencyTest(file_path)
 
+
+		ratio = FundamentalFrequencyTest(file_path)
+		if ratio != None:
+			if ratio >= 0.9 and ratio <= 1.1:
+				success_count += 1
+
+		total_count += 1
+
+	print("Success rate: {}/{} -> {}%".format(success_count, total_count, success_count/total_count*100))
+
+def DetectPeaks(data, minimum_index, minimum_peak_height):
+	peaks_indices = []
+	for i in range(minimum_index+1, len(data)-2):
+		if data[i] > data[i-1] and data[i] > data[i+1] and data[i] >= minimum_peak_height:
+			peaks_indices.append(i)
+
+	return peaks_indices
 
 
 def ExportCSV():
@@ -1035,7 +1348,7 @@ menubar = tk.Menu(root)
 filemenu = tk.Menu(menubar, tearoff=0)
 #filemenu.add_command(label="Open...", command=OpenWAVFile, underline=0)
 filemenu.add_command(label="Open...", command=OpenWAVFile, underline=0)
-filemenu.add_command(label="Analyze file", command=FundamentalFrequencyTest, underline=0)
+#filemenu.add_command(label="Analyze file", command=NaiveHPSTestSound, underline=0)
 filemenu.add_command(label="List files...", command=AnalyzeFolder, underline=0)
 filemenu.add_command(label="Record", command=RecordMic, underline=0)
 filemenu.add_command(label="Post memory", command=tracker.print_diff, underline=0)

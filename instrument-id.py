@@ -45,7 +45,10 @@ import scipy.stats
 
 q_max_default = 5 # Default maximum downsampling ratio, q, to use with harmonic product spectrum algorithm
 
+# This function, CustomNotebook(), comes from an answer to the following stackoverflow post:
 # https://stackoverflow.com/questions/39458337/is-there-a-way-to-add-close-buttons-to-tabs-in-tkinter-ttk-notebook
+#
+# It adds close buttons to each tab, making it significantly easier to deal with multiple open files quickly.
 class CustomNotebook(ttk.Notebook):
     """A ttk Notebook with close buttons on each tab"""
 
@@ -138,15 +141,25 @@ A4_freq = 440.0
 A4_midi_number = 69
 C4_midi_number = 60
 notes_per_octave = 12
-note_names = np.array(['C', 'Cs', 'D', 'Ds', 'E', 'F', 'Fs', 'G', 'Gs', 'A', 'As', 'B'])
+note_names = np.array(['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b'])
 
 def FreqToMidiNumber(freq):
 	midi_number = round(A4_midi_number + notes_per_octave * math.log(freq / A4_freq, 2))
-	return midi_number
+	return int(midi_number)
 
 def NoteToMidiNumber(name, octave):
-	midi_number = C4_midi_number + (octave - 4) * notes_per_octave + np.where(note_names == name)[0][0]
-	return midi_number
+	midi_number = C4_midi_number + (octave - 4) * notes_per_octave + np.where(note_names == name.lower())[0][0]
+	return int(midi_number)
+
+min_midi_number = NoteToMidiNumber("A", 3)
+max_midi_number = NoteToMidiNumber("A", 4)	
+
+# Normalize a midi number from min_midi_number to max_midi_number on the interval [0,1]
+def NormalizedMidiNumber(midi_number):
+	if midi_number < min_midi_number or midi_number > max_midi_number:
+		print("Midi number outside of valid range")
+
+	return (midi_number - min_midi_number) / (max_midi_number - min_midi_number)
 
 def FreqToNote(freq):
 	midi_number = FreqToMidiNumber(freq)
@@ -595,16 +608,24 @@ class Waveform:
 
 		return self.peak_freq_indices
 
-	def GeneratePlots(self, debug_plots = False):
+	def GenerateHPSPlots(self, plot_title=""):
 		try:
-			self.freq_samples
-		except:
-			self.GenerateFFT()
-
-		try:
-			self.harmonic_product_spectrum
+			self.running_harmonic_product_spectrums
 		except:
 			self.HPSNaive()
+
+		for spectrum in self.running_harmonic_product_spectrums:
+			np_spectrum = np.array(spectrum)
+			spectrum_normalized = np_spectrum / np.max(spectrum)
+			ax_hps.plot(self.freqs, spectrum_normalized, color='green')
+
+	def GeneratePlots(self, plot_title = "", debug_plots = False):
+		try:
+			self.harmonic_peak_indices
+		except:
+			self.DetectHarmonicPeaks()
+
+
 		#try:
 		#	self.peak_indices
 		#except:
@@ -616,7 +637,14 @@ class Waveform:
 		#	self.DetectFundamental()
 
 		fig, (ax_time, ax_freq, ax_hps) = plt.subplots(3, 1)
+		#fig.set_size_inches(9.5, 11)
 
+		#lt.tight_layout()
+		plt.subplots_adjust(hspace=0.7)
+		plt.suptitle(plot_title, fontsize=16)
+		ax_time.set_title("Time-domain representation")
+		ax_time.set_xlabel('time [s]')
+		ax_time.set_ylabel("amplitude [arbitrary]")
 		ax_time.plot(self.times, self.time_samples)
 		#downsampled_time_domain = scipy.signal.decimate(self.time_samples, 2)
 		#print("downsampled: {}; normal: {}".format(len(downsampled_time_domain), len(self.time_samples)))
@@ -628,8 +656,15 @@ class Waveform:
 			ax_time.axvline(self.trim_end, color='red')
 			ax_time.axhline(color='purple', linewidth=0.8)
 
+		ax_freq.set_title("Frequency-domain representation")
+		ax_freq.set_xlabel("frequency [Hz]")
+		ax_freq.set_ylabel("amplitude [arbitrary]")
 		ax_freq.plot(self.freqs, self.freq_samples)
 
+		ax_hps.set_title("Harmonic product spectrum")
+		ax_hps.set_xlabel("frequency [Hz]")
+		ax_hps.set_ylabel("amplitude [arbitrary]")
+		ax_hps.set_xlim(xmin = 0, xmax = self.IndexToFreq(np.argmax(self.harmonic_product_spectrum) * 4))
 		ax_hps.plot(self.freqs, self.harmonic_product_spectrum)
 		#print("len(HPSs)={}".format(len(self.harmonic_product_spectrums)))
 #		for spectrum in self.downsampled_spectrums:
@@ -643,7 +678,8 @@ class Waveform:
 			peak_ratios = [k / max_peak_amplitude for k in peak_amplitudes]
 	
 			ax_freq.set_xlim(xmin = 0, xmax = self.freqs[self.harmonic_peak_indices[-1]] * 1.2)
-			#ax_freq.set_ylim(ymin = 0, ymax = np.amax(self.freq_samples) * 1.2)
+			ax_hps.set_xlim(xmin = 0, xmax = self.freqs[self.harmonic_peak_indices[-1]] * 1.2)
+			ax_freq.set_ylim(ymin = 0, ymax = np.amax(self.freq_samples) * 1.2)
 	
 			ax_freq.scatter(peak_freqs, peak_amplitudes, color='purple', marker='o', s=8, zorder=10)
 			annotate_font = {'size': 8}
@@ -667,6 +703,8 @@ class Waveform:
 			ax_freq.scatter(end_threshold_freqs, end_threshold_amplitudes, color='red', marker='v', s=8, zorder=13)			
 
 		#fig.show()
+
+		#plt.savefig('figures/{}.png'.format(plot_title), dpi=100)
 
 		return fig
 #
@@ -754,16 +792,20 @@ class Waveform:
 		freq_samples = self.freq_samples
 
 		running_hps = [1] * len(freq_samples)
+		self.running_harmonic_product_spectrums = []
 		for q in np.linspace(1, q_max, q_max, dtype=int):
 			downsampled_freq_samples = scipy.signal.decimate(freq_samples, q)
 			padded_downsampled_freq_samples = np.pad(downsampled_freq_samples, (0, len(freq_samples) - len(downsampled_freq_samples)), mode='constant')
 			running_hps *= padded_downsampled_freq_samples
+			self.running_harmonic_product_spectrums.append(running_hps)
+			#print('t')			
 
 		low_freq_cutoff = A0_freq
 		low_freq_cutoff_index = self.FreqToIndex(low_freq_cutoff)
 		self.harmonic_product_spectrum_unfiltered = running_hps
 		self.harmonic_product_spectrum_filtered = running_hps[low_freq_cutoff_index:]
 		self.harmonic_product_spectrum = np.pad(self.harmonic_product_spectrum_filtered, (len(self.harmonic_product_spectrum_unfiltered) - len(self.harmonic_product_spectrum_filtered), 0), mode='constant')
+
 
 		#for i in self.harmonic_product_spectrum:
 			#print(
@@ -820,16 +862,11 @@ class Waveform:
 
 	def DetectHarmonicPeaks(self):
 		try:
-			self.freq_samples
-		except:
-			self.GenerateFFT()
-
-		try:
 			self.fundamental_freq
 		except:
 			self.HPSNaive()
 
-		print("Detecting harmonic peaks")
+		#print("Detecting harmonic peaks")
 		#print("fundamental={}".format(self.fundamental_freq))
 		freq_percentage_threshold = 0.5
 		search_radius_freq = self.fundamental_freq * freq_percentage_threshold
@@ -851,11 +888,6 @@ class Waveform:
 
 	def GetHarmonicPeakRatios(self):
 		try:
-			self.freq_samples
-		except:
-			self.GenerateFFT()
-
-		try:
 			self.harmonic_peak_indices
 		except:
 			self.DetectHarmonicPeaks()			
@@ -871,6 +903,24 @@ class Waveform:
 			self.harmonic_peak_ratios.append(harmonic_peak_ratio)
 
 		return self.harmonic_peak_ratios
+
+	# Threshold is a percent (as decimal), so the detected fundamental must lie within 10% (if threshold=0.1) of the theoretical fundamental
+	def CheckIfFundamentalMatchesFileName(self, threshold=0.1):
+		try:
+			self.fundamental_freq
+		except:
+			self.HPSNaive()
+
+		_, note_name, octave_number = ParseAudioFileName(self.file_name)
+
+		thereoretical_fundamental_freq = NoteToFreq(note_name, octave_number)
+
+		ratio = self.fundamental_freq / thereoretical_fundamental_freq
+		if ratio > 1 - threshold and ratio < 1 + threshold:
+			return True
+		else:
+			return False
+
 
 
 
@@ -1194,8 +1244,21 @@ def ParseAudioFileName(file_name):
 #def CheckFundamentalFrequencyWithFilename():
 
 
+def AddNewTabAndPlotSoundData(sound, tab_name):
+	frame = tk.Frame(notebook)
+	notebook.add(frame, text=tab_name)	
 
+	figure = sound.GeneratePlots(tab_name)
 
+	canvas = FigureCanvasTkAgg(figure, frame)
+	canvas.draw()
+	canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+
+	toolbar = NavigationToolbar2TkAgg(canvas, frame)
+	toolbar.update()
+	canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+	plt.close("all")
 
 
 def RecordMic():
@@ -1203,9 +1266,9 @@ def RecordMic():
 	sound.RecordFromMicrophone()
 	#figure = sound.GeneratePlots()
 
-	frame = tk.Frame(notebook)
+#	frame = tk.Frame(notebook)
 	#file_name = os.path.basename(file_path)
-	notebook.add(frame, text="recording")
+#	notebook.add(frame, text="recording")
 
 	#sound.GenerateHarmonicProductSpectrum()
 	#sound.HPSNaive(3)
@@ -1215,6 +1278,8 @@ def RecordMic():
 
 	sound.HPSNaive()
 	sound.DetectHarmonicPeaks()
+
+	AddNewTabAndPlotSoundData(sound, "recording")
 #
 #		instrument_name, note_name, octave_number = ParseAudioFileName(file_name)
 #		print("file name data:")
@@ -1227,20 +1292,20 @@ def RecordMic():
 #		print("\tdetected_fundamental: {}Hz".format(detected_fundamental))
 #		print()
 #
-	figure = sound.GeneratePlots()
-
-	#notebook.pack(side="top", fill="both", expand=True)
-
-
-	canvas = FigureCanvasTkAgg(figure, frame)
-	canvas.draw()
-	canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
-
-	toolbar = NavigationToolbar2TkAgg(canvas, frame)
-	toolbar.update()
-	canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-	plt.close("all")
+#	figure = sound.GeneratePlots()
+#
+#	#notebook.pack(side="top", fill="both", expand=True)
+#
+#
+#	canvas = FigureCanvasTkAgg(figure, frame)
+#	canvas.draw()
+#	canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+#
+#	toolbar = NavigationToolbar2TkAgg(canvas, frame)
+#	toolbar.update()
+#	canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+#
+#	plt.close("all")
 
 
 #	fig, (ax_time, ax_freq) = plt.subplots(2, 1)
@@ -1339,9 +1404,9 @@ def OpenWAVFile(file_path = None):
 		file_path = filedialog.askopenfilename()
 
 	if(sound.LoadFromFile(file_path)):
-		frame = tk.Frame(notebook)
+#		frame = tk.Frame(notebook)
 		file_name = os.path.basename(file_path)
-		notebook.add(frame, text=file_name)
+#		notebook.add(frame, text=file_name)
 
 		#fig, (ax_time, ax_freq) = plt.subplots(2, 1)
 
@@ -1353,6 +1418,8 @@ def OpenWAVFile(file_path = None):
 
 		sound.HPSNaive()
 		sound.DetectHarmonicPeaks()
+
+		AddNewTabAndPlotSoundData(sound, file_name[:-4]) # file_name without extension
 #
 #		instrument_name, note_name, octave_number = ParseAudioFileName(file_name)
 #		print("file name data:")
@@ -1365,20 +1432,20 @@ def OpenWAVFile(file_path = None):
 #		print("\tdetected_fundamental: {}Hz".format(detected_fundamental))
 #		print()
 #
-		figure = sound.GeneratePlots()
-
-		#notebook.pack(side="top", fill="both", expand=True)
-
-
-		canvas = FigureCanvasTkAgg(figure, frame)
-		canvas.draw()
-		canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
-
-		toolbar = NavigationToolbar2TkAgg(canvas, frame)
-		toolbar.update()
-		canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-		plt.close("all")
+#		figure = sound.GeneratePlots()
+#
+#		#notebook.pack(side="top", fill="both", expand=True)
+#
+#
+#		canvas = FigureCanvasTkAgg(figure, frame)
+#		canvas.draw()
+#		canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+#
+#		toolbar = NavigationToolbar2TkAgg(canvas, frame)
+#		toolbar.update()
+#		canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+#
+#		plt.close("all")
 
 # Check how close the detected fundamental frequency is to that indicated by the file name
 def FundamentalFrequencyTest(file_path = None):
@@ -1435,31 +1502,37 @@ class WaveformHarmonicData:
 	def GetDataStringHuman(self):
 		data_string = ""
 
-		data_string += "Instrument: {}\n".format(self.instrument_name)
-		data_string += "Midi Number: {}\n".format(self.midi_number)
-		data_string += "Peak ratios: {}\n".format(self.peak_ratios)
+		data_string += "Instrument: {}\n".format(self.data['instrument_name'])
+		data_string += "Normalized Midi Number: {}\n".format(self.data['normalized_midi_number'])
+		data_string += "Peak ratios: {}\n".format(self.data['peak_ratios'])
 
 		return data_string
 	def GetDataStringCSV(self):
 		data_string = ""
 
-		data_string += "{},".format(self.instrument_name.lower())
-		data_string += "{},".format(self.midi_number)
-		data_string += "{}\n".format(self.peak_ratios)
+		data_string += "{},".format(self.data['instrument_name'].lower())
+		data_string += "{},".format(self.data['normalized_midi_number'])
+		data_string += "{}\n".format(self.data['peak_ratios'])
 
 		return data_string
+
+import json
 
 def GatherHarmonicRatiosForFolder(output_file_path = None, debug_print = True):
 	folder_path = filedialog.askdirectory()
 
 	if not output_file_path:
-		output_file_path = filedialog.asksaveasfilename(title="Save data as...", filetypes = (("csv file", "*.csv"),))
+		output_file_path = filedialog.asksaveasfilename(title="Save data as...", filetypes = (("json file", "*.json"),))
 
-	if folder_path == "" or output_file_path == "":
+	print("folder_path={}; output_file_path={}".format(folder_path, output_file_path))
+
+	if not folder_path or not output_file_path:
 		print("Cancelling GatherHarmonicRatiosForFolder. Either target folder or output file not chosen.")
 		return
 
-	data_strings = []
+	SumsOfPeakRatios = np.array([0.0] * 9)
+	file_count = 0
+	data = []
 	for file_name in listdir(folder_path):
 		file_path = folder_path + "/" + file_name
 
@@ -1471,30 +1544,42 @@ def GatherHarmonicRatiosForFolder(output_file_path = None, debug_print = True):
 
 		waveform = Waveform()
 		if(waveform.LoadFromFile(file_path)):
-			print("Analyzing {}...".format(file_path))
+			if waveform.CheckIfFundamentalMatchesFileName() == True:
 
-			waveform_data = WaveformHarmonicData()
+				print("Analyzing {}...".format(file_path))
+				file_count += 1
 
-			harmonic_peak_ratios = waveform.GetHarmonicPeakRatios()
-			#print(harmonic_peak_rat)
-			
-			waveform_data.peak_ratios = harmonic_peak_ratios
-			waveform_data.instrument_name = instrument_name
-			waveform_data.midi_number = NoteToMidiNumber(note_name, octave_number)
+				waveform_data = WaveformHarmonicData()
 
-			print(waveform_data)
+				harmonic_peak_ratios = waveform.GetHarmonicPeakRatios()
+				SumsOfPeakRatios += harmonic_peak_ratios
+				#print("SumsOfPeakRatios={}".format(SumsOfPeakRatios))
+				#print(harmonic_peak_rat)
+				
+				waveform_data.data = {}
+				waveform_data.data['peak_ratios'] = harmonic_peak_ratios
+				waveform_data.data['instrument_name'] = instrument_name
+				waveform_data.data['normalized_midi_number'] = NormalizedMidiNumber(NoteToMidiNumber(note_name, octave_number))
 
+				if debug_print == True:
+					print(waveform_data.GetDataStringHuman())
 
+				data.append(waveform_data.data)
+			else:
+				print("Skipping file. Detected f_f doesn't match file name for: {}".format(file_path))
 
-			if debug_print == True:
-				print(waveform_data.GetDataStringHuman())
+	PeakRatioAverages = SumsOfPeakRatios / file_count
+	print("Peak Ratio Averages={}".format(PeakRatioAverages))
 
-			data_strings.append(waveform_data.GetDataStringCSV())
-
-		
+	
+	print(data)
 	with open(output_file_path, "w") as output_file:
-		for data_string in data_strings:
-			output_file.write(data_string)
+		json.dump(data, output_file)
+
+			#output_file.write(data_string)
+
+	print("------------\nFinished analyzing folder: {}".format(folder_path))
+	print("Output file: {}\n----------------".format(output_file_path))
 
 
 
@@ -1554,14 +1639,143 @@ def ExportCSV():
 			csv_file.write(str(e))
 			csv_file.write(',\n')
 
+def FetchTrainingDataFromFile(file_path):
+	with open(file_path) as training_data_file:
+		training_data = json.load(training_data_file)
+
+	return training_data
+			
+
+
+from sklearn.neural_network import MLPClassifier
+import sklearn.metrics# import classification_report, confusion_matrix
+#import random
+import sklearn.model_selection
+import sklearn.utils
+import sklearn.preprocessing
+
+instrument_classifier = MLPClassifier(solver='lbfgs', alpha=0.001, hidden_layer_sizes=(6), learning_rate='adaptive')
+g_is_trained = False
+
+def RenormalizeFromPositiveToDual():
+	pass
+
+def TrainNetwork():
+	training_data_folder_path = filedialog.askdirectory()
+
+	if training_data_folder_path:
+		feature_vectors = []
+		class_labels = []
+
+		for file_name in listdir(training_data_folder_path):
+			file_path = training_data_folder_path + "/" + file_name
+			print(file_path)
+			training_data = FetchTrainingDataFromFile(file_path)
+
+			for training_point in training_data:
+				normalized_midi_number = training_point['normalized_midi_number']
+				if normalized_midi_number >= 0 and normalized_midi_number <= 1:
+					feature_vectors.append([training_point['normalized_midi_number']] + training_point['peak_ratios'])
+					class_labels.append(training_point['instrument_name'])
+
+		feature_vectors_scaled = sklearn.preprocessing.scale(feature_vectors)
+		#class_labels_scaled = sklearn.preprocessing.scale(class_labels)
+
+		print("feature_vectors_mean={}; feature_vectors_std={}".format(feature_vectors_scaled.mean(axis=0), feature_vectors_scaled.std(axis=0)))
+
+		#print("feature_vectors = {}\nclass_labels={}".format(feature_vectors, class_labels))
+
+		#feature_vectors_training = feature_vectors_scaled
+		#class_labels_training = class_labels
+		feature_vectors_training, feature_vectors_test, class_labels_training, class_labels_test = sklearn.model_selection.train_test_split(feature_vectors_scaled, class_labels, test_size=0.5)
+
+		number_of_epochs = 200
+		for epoch in range(number_of_epochs):
+			feature_vectors_training, class_labels_training = sklearn.utils.shuffle(feature_vectors_training, class_labels_training)
+#			combined_list_training = list(zip(feature_vectors_training, class_labels_training))
+#			random.shuffle(combined_list_training)
+#			feature_vectors_training, class_labels_training = zip(*combined_list_training)
+
+			#print("class_labels_training={}".format(class_labels_training))
+			#print(feature_vectors_training)
+			instrument_classifier.fit(feature_vectors_training, class_labels_training)
+
+
+			print("len(class_labels_training={}".format(len(class_labels_training)))
+			predicted_classification = instrument_classifier.predict(feature_vectors_training)
+			confusion_matrix = sklearn.metrics.confusion_matrix(class_labels_training, predicted_classification)
+			predicted_probability = instrument_classifier.predict_proba(feature_vectors_training)
+			print("------------")
+			print("Epoch {}:".format(epoch))
+			print(confusion_matrix)
+			#print("Probability:\n {}".format(predicted_probability))
+
+
+		global g_is_trained
+		g_is_trained = True
+		#print("is_trained={}".format(is_trained))
+		print("Finished training.")
+
+def ClassifyFile(file_path = None):
+	if g_is_trained == False:
+		print("Can't classify a sound because the network hasn't been trained.")
+	else:
+		if not file_path:
+			file_path = filedialog.askopenfilename()
+
+		if file_path:
+			test_waveform = Waveform()
+			test_waveform.LoadFromFile(file_path)
+			detected_fundamental_freq = test_waveform.HPSNaive()
+			midi_number = FreqToMidiNumber(detected_fundamental_freq)
+			normalized_midi_number = [NormalizedMidiNumber(midi_number)]
+			peak_ratios = test_waveform.GetHarmonicPeakRatios()
+
+
+			file_name = os.path.basename(file_path)
+			AddNewTabAndPlotSoundData(test_waveform, file_name)
+
+			feature_vector = [normalized_midi_number + peak_ratios]
+			print("feature_vector: {}".format(feature_vector))
+
+			predicted_classification = instrument_classifier.predict(feature_vector)
+			#print(confusion_matrix(y_test, predicited_classification))
+			predicted_probability = instrument_classifier.predict_proba(feature_vector)
+			print("{}: p={}".format(predicted_classification, predicted_probability))
+
+def ClassifyRecording():
+	if g_is_trained == False:
+		print("Can't classify a recording because the network hasn't been trained.")
+	else:
+		test_waveform = Waveform()
+		test_waveform.RecordFromMicrophone()
+		detected_fundamental_freq = test_waveform.HPSNaive()
+		test_waveform.GeneratePlots()
+		midi_number = [FreqToMidiNumber(detected_fundamental_freq)]
+		peak_ratios = test_waveform.GetHarmonicPeakRatios()
+
+		AddNewTabAndPlotSoundData(test_waveform, "recording")
+
+		feature_vector = [midi_number + peak_ratios]
+
+		predicted_classification = instrument_classifier.predict(feature_vector)
+		predicted_probability = instrument_classifier.predict_proba(feature_vector)
+		print("{}: p={}".format(predicted_classification, predicted_probability))	
+
+
+	
+
 menubar = tk.Menu(root)
 filemenu = tk.Menu(menubar, tearoff=0)
 #filemenu.add_command(label="Open...", command=OpenWAVFile, underline=0)
 filemenu.add_command(label="Open...", command=OpenWAVFile, underline=0)
 #filemenu.add_command(label="Analyze file", command=NaiveHPSTestSound, underline=0)
 filemenu.add_command(label="Analyze folder for peak ratio data...", command=GatherHarmonicRatiosForFolder, underline=0)
+filemenu.add_command(label="Train NN on folder...", command=TrainNetwork, underline=0)
+filemenu.add_command(label="Classify sound file...", command=ClassifyFile, underline=0)
+filemenu.add_command(label="Record and classify...", command=ClassifyRecording, underline=0)
 filemenu.add_command(label="Record", command=RecordMic, underline=0)
-filemenu.add_command(label="Post memory", command=tracker.print_diff, underline=0)
+#filemenu.add_command(label="Post memory", command=tracker.print_diff, underline=0)
 filemenu.add_command(label="Quit", command=root.quit, underline=0)
 menubar.add_cascade(label="File", menu=filemenu, underline=0)
 root.config(menu=menubar)

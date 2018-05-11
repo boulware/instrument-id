@@ -14,3 +14,16 @@ Naive HPS (Explicit removal) => 95.9% success on trumpet(filtered)
 
 Naive HPS (Explicit) => 89.7% success on flute(filtered)
 
+
+average peaks for violin(mtg) [all files]: [0.82797396 0.55176601 0.40444435 0.29177602 0.22896807 0.14393166
+ 0.10746704 0.07198614 0.05247223]
+
+average peak for violin(philharmonic) [all files]: [0.8531642  0.53636316 0.2775057  0.14920616 0.09898374 0.0592631
+ 0.04540921 0.02975073 0.02290525]
+
+
+ average peaks for trumpet(mtg) [all files]: [0.81053968 0.74500605 0.62927409 0.47489692 0.3772105  0.29234513
+ 0.21921871 0.15804027 0.12078855]
+
+average peaks for trumpet(philharmonic) [all filed]: [0.7181359  0.59736296 0.39984331 0.29564302 0.22319641 0.16464978
+ 0.11844965 0.09140912 0.08384074]

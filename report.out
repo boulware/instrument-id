@@ -1,0 +1,19 @@
+\BOOKMARK [1][-]{section.1}{Preliminary Research Proposal Statement}{}% 1
+\BOOKMARK [1][-]{section.2}{Postliminary Revised Research Description}{}% 2
+\BOOKMARK [1][-]{section.3}{Overview of the algorithm}{}% 3
+\BOOKMARK [1][-]{section.4}{Justification of model choices}{}% 4
+\BOOKMARK [2][-]{subsection.4.1}{Pitch detection}{section.4}% 5
+\BOOKMARK [2][-]{subsection.4.2}{Neural network}{section.4}% 6
+\BOOKMARK [1][-]{section.5}{Details of algorithm}{}% 7
+\BOOKMARK [2][-]{subsection.5.1}{Fast Fourier transform}{section.5}% 8
+\BOOKMARK [2][-]{subsection.5.2}{Harmonic product spectrum}{section.5}% 9
+\BOOKMARK [2][-]{subsection.5.3}{Peak finding in the DFT}{section.5}% 10
+\BOOKMARK [2][-]{subsection.5.4}{Training the neural network}{section.5}% 11
+\BOOKMARK [1][-]{section.6}{Results}{}% 12
+\BOOKMARK [1][-]{section.7}{Discussion}{}% 13
+\BOOKMARK [1][-]{section.8}{Flaws}{}% 14
+\BOOKMARK [1][-]{section.9}{Possible Extensions}{}% 15
+\BOOKMARK [1][-]{section.10}{Reflections}{}% 16
+\BOOKMARK [1][-]{section.11}{References}{}% 17
+\BOOKMARK [1][-]{section.12}{Training and Test Set}{}% 18
+\BOOKMARK [1][-]{section.13}{Appendix \(beginning next page\)}{}% 19
